@@ -1,41 +1,5 @@
 import { MessageSquare, Phone } from "lucide-react";
-
-export interface InternalNote {
-  id: string;
-  authorName: string;
-  authorInitials: string;
-  text: string;
-  timestamp: string;
-  pinned?: boolean;
-}
-
-export interface ChatMessage {
-  id: string;
-  sender: "agent" | "client";
-  text: string;
-  time: string;
-}
-
-export interface Conversation {
-  id: string;
-  clientName: string;
-  topic: string;
-  status: "active" | "closed" | "waiting";
-  startTime: string;
-  messages: ChatMessage[];
-  notes: InternalNote[];
-}
-
-export interface Agent {
-  id: string;
-  name: string;
-  role: string;
-  phone: string;
-  avatar: string;
-  initials: string;
-  online: boolean;
-  conversations: Conversation[];
-}
+import type { Agent } from "./types";
 
 interface AgentCardProps {
   agent: Agent;
@@ -44,8 +8,8 @@ interface AgentCardProps {
 }
 
 export function AgentCard({ agent, isSelected, onClick }: AgentCardProps) {
-  const activeConversations = agent.conversations.filter((c) => c.status === "active").length;
-  const totalNotes = agent.conversations.reduce((acc, c) => acc + c.notes.length, 0);
+  const conversations = agent.conversations ?? [];
+  const activeConversations = conversations.filter((c) => c.status === "active").length;
 
   return (
     <div
@@ -103,17 +67,11 @@ export function AgentCard({ agent, isSelected, onClick }: AgentCardProps) {
         )}
       </div>
 
-      {/* Phone + notes badge */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-xs text-slate-500">
           <Phone size={11} />
           <span>{agent.phone}</span>
         </div>
-        {totalNotes > 0 && (
-          <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-            📝 {totalNotes}
-          </span>
-        )}
       </div>
     </div>
   );

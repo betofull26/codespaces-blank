@@ -105,5 +105,5 @@ export async function mockLogin(username: string, password: string): Promise<Log
 
 /* ── Route each role to its home ── */
 export function homeRouteFor(role: UserRole): string {
-  return role === "admin" ? "/dashboard" : "/panel-agente";
+  return "/dashboard";
 }

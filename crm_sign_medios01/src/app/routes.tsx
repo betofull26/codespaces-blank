@@ -3,8 +3,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
 import { DirectorioPage } from "./pages/DirectorioPage";
+import { ConexionDispositivosPage } from "./pages/ConexionDispositivosPage";
+import { PlantilladasPage } from "./pages/PlantilladasPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { AgentPanelPage } from "./pages/AgentPanelPage";
 
 export const router = createBrowserRouter([
   {
@@ -24,11 +25,15 @@ export const router = createBrowserRouter([
     Component: DirectorioPage,
   },
   {
-    path: "/ajustes",
-    Component: SettingsPage,
+    path: "/conexion-dispositivos",
+    Component: ConexionDispositivosPage,
   },
   {
-    path: "/panel-agente",
-    Component: AgentPanelPage,
+    path: "/plantilladas",
+    Component: PlantilladasPage,
+  },
+  {
+    path: "/ajustes",
+    Component: SettingsPage,
   },
 ]);

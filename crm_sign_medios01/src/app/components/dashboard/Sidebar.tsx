@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { Home, ClipboardList, BookUser, User, Settings, LogOut, SlidersHorizontal } from "lucide-react";
+import { Home, BookUser, PlugZap, FileText, User, Settings, LogOut, SlidersHorizontal } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import companyLogo from "../../../imports/IMG_20260602_130639_278.jpg";
@@ -51,8 +51,6 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
             )}
           </div>
 
-          {/* (Gestión de Fichas eliminado de la barra lateral) */}
-
           {/* Directorio */}
           <div
             className={[
@@ -69,6 +67,46 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
             />
             <span className="flex-1 truncate">Directorio</span>
             {selectedNode === "directorio" && (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+            )}
+          </div>
+
+          {/* Conexión de Dispositivos */}
+          <div
+            className={[
+              "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
+              selectedNode === "conexion-dispositivos"
+                ? "bg-blue-50 font-semibold text-blue-700"
+                : "text-slate-700 hover:bg-slate-100",
+            ].join(" ")}
+            onClick={() => navigate("/conexion-dispositivos")}
+          >
+            <PlugZap
+              size={18}
+              className={selectedNode === "conexion-dispositivos" ? "text-blue-600" : "text-slate-500"}
+            />
+            <span className="flex-1 truncate">Conexión de Dispositivos</span>
+            {selectedNode === "conexion-dispositivos" && (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+            )}
+          </div>
+
+          {/* Plantilladas */}
+          <div
+            className={[
+              "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
+              selectedNode === "plantilladas"
+                ? "bg-blue-50 font-semibold text-blue-700"
+                : "text-slate-700 hover:bg-slate-100",
+            ].join(" ")}
+            onClick={() => navigate("/plantilladas")}
+          >
+            <FileText
+              size={18}
+              className={selectedNode === "plantilladas" ? "text-blue-600" : "text-slate-500"}
+            />
+            <span className="flex-1 truncate">Plantilladas</span>
+            {selectedNode === "plantilladas" && (
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
             )}
           </div>

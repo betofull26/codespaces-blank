@@ -5,7 +5,7 @@ import {
   UserCheck, Clock, Layers,
 } from "lucide-react";
 import { agentsData } from "./agentsData";
-import type { Agent, Conversation } from "./AgentCard";
+import type { Agent, Conversation } from "./types";
 
 /* ══════════════════════════════════════════════════════
    ROUND ROBIN ALGORITHM

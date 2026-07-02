@@ -3,7 +3,6 @@ import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
 import { agentsData } from "../components/dashboard/agentsData";
 import JSZip from "jszip";
-import { panelConversations } from "../components/agent/agentPanelData";
 import { UserRecordManagement } from "../components/dashboard/UserRecordManagement";
 import {
   Download, MessageSquare, Users, HardDrive, CheckCircle2, Loader2,
@@ -427,29 +426,7 @@ export function SettingsPage() {
     simulate(setChatsStatus, async () => {
       const zip = new JSZip();
 
-      // Chats: export messages as plain text files and include attachments if present
-      for (const conv of panelConversations) {
-        const folder = zip.folder(`${conv.clientName.replace(/[^a-z0-9]/gi, "_")}_${conv.id}`) as JSZip;
-        // messages.txt with plain text messages
-        const txtLines = conv.messages.map((m) => `[${m.time}] ${m.authorName ?? (m.type === 'whatsapp_out' ? 'Agent' : m.type === 'internal_note' ? 'Note' : 'Client')}: ${m.text}`).join("\n");
-        folder.file("messages.txt", txtLines);
-
-        // fetch attachments and add to folder
-        for (const m of conv.messages) {
-          if (m.attachment && m.attachment.url) {
-            try {
-              const res = await fetch(m.attachment.url);
-              const blob = await res.arrayBuffer();
-              const filename = m.attachment.name || `attachment_${m.id}`;
-              folder.file(filename, blob);
-            } catch (e) {
-              // ignore fetch errors but continue
-              console.warn("Failed to fetch attachment:", e);
-            }
-          }
-        }
-      }
-
+      // No chat conversations available without the agent panel.
       const content = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(content);
@@ -468,22 +445,7 @@ export function SettingsPage() {
     simulate(setFullStatus, async () => {
       const zip = new JSZip();
 
-      // add chats (as folders per conversation)
-      for (const conv of panelConversations) {
-        const folder = zip.folder(`${conv.clientName.replace(/[^a-z0-9]/gi, "_")}_${conv.id}`) as JSZip;
-        const txtLines = conv.messages.map((m) => `[${m.time}] ${m.authorName ?? (m.type === 'whatsapp_out' ? 'Agent' : m.type === 'internal_note' ? 'Note' : 'Client')}: ${m.text}`).join("\n");
-        folder.file("messages.txt", txtLines);
-        for (const m of conv.messages) {
-          if (m.attachment && m.attachment.url) {
-            try {
-              const res = await fetch(m.attachment.url);
-              const blob = await res.arrayBuffer();
-              const filename = m.attachment.name || `attachment_${m.id}`;
-              folder.file(filename, blob);
-            } catch (e) { console.warn("Failed to fetch attachment:", e); }
-          }
-        }
-      }
+      // No chat conversations available without the agent panel.
 
       // add contacts CSV
       const csv = [["ID","Nombre","Teléfono","Asignado a"], ...mockContacts.map((c) => [c.id, c.name, c.phone, c.assignedTo ?? "Sin asignar"])].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
@@ -614,7 +576,7 @@ export function SettingsPage() {
                   <BackupCard
                     icon={<Users size={18} />}
                     title="Respaldo de Contactos"
-                    description={`Exporta los ${mockContacts.length} contactos del directorio con sus asignaciones.`}
+                    description={`Exporta los ${mockContacts.length} contactos con sus asignaciones.`}
                     formats={["csv"]}
                     status={contactsStatus}
                     onBackupCSV={backupContactsCSV}
@@ -750,7 +712,6 @@ export function SettingsPage() {
                   </div>
                 ))}
 
-                {/* Info note */}
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
                   <p className="flex items-start gap-2 text-xs text-blue-700">
                     <SlidersHorizontal size={14} className="mt-0.5 shrink-0" />

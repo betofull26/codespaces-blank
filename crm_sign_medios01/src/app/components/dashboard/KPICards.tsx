@@ -1,9 +1,10 @@
-import { Ticket, UserCheck, UserX, AlertCircle, TrendingUp, Users } from "lucide-react";
+import { TrendingUp } from "lucide-react";
+import type { ReactNode } from "react";
 
-interface KPICardProps {
-  icon: React.ReactNode;
+export interface KPICardProps {
+  icon: ReactNode;
   label: string;
-  value: string | number;
+  value: number | string;
   trend?: string;
   color: "blue" | "emerald" | "amber" | "slate" | "gray";
 }
@@ -18,7 +19,7 @@ function KPICard({ icon, label, value, trend, color }: KPICardProps) {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-center justify-between">
         <div className={`rounded-lg p-2 ${colorClasses[color]}`}>{icon}</div>
         {trend && (
@@ -36,38 +37,12 @@ function KPICard({ icon, label, value, trend, color }: KPICardProps) {
   );
 }
 
-export function KPICards() {
-  // Datos base
-  const totalAgentes = 24;
-  const agentesConectados = 18;
-  const agentesDesconectados = totalAgentes - agentesConectados;
-
+export function KPICards({ cards }: { cards: KPICardProps[] }) {
   return (
-    <div className="mb-5 grid grid-cols-4 gap-4">
-      <KPICard
-        icon={<Users size={20} />}
-        label="Total de Agentes"
-        value={totalAgentes}
-        color="blue"
-      />
-      <KPICard
-        icon={<UserCheck size={20} />}
-        label="Agentes Conectados"
-        value={agentesConectados}
-        color="emerald"
-      />
-      <KPICard
-        icon={<UserX size={20} />}
-        label="Agentes Desconectados"
-        value={agentesDesconectados}
-        color="gray"
-      />
-      <KPICard
-        icon={<AlertCircle size={20} />}
-        label="Reasignaciones Pendientes"
-        value={8}
-        color="amber"
-      />
+    <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {cards.map((card) => (
+        <KPICard key={card.label} {...card} />
+      ))}
     </div>
   );
 }

@@ -299,12 +299,6 @@ export function LoginCard() {
               <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] border border-slate-200">supervisor</code>
               <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] border border-slate-200">admin2026</code>
             </div>
-            <div className="flex items-center gap-2">
-              <MessageSquare size={10} className="shrink-0 text-emerald-500" />
-              <span className="font-medium">Agente:</span>
-              <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] border border-slate-200">cmendoza</code>
-              <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] border border-slate-200">agente2026</code>
-            </div>
           </div>
         </div>
       </div>

@@ -1,22 +1,45 @@
-import { useState } from "react";
-import { Users, UserCheck, Search } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Users, UserCheck, Search, MessageSquare } from "lucide-react";
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
 import { AgentCard } from "../components/dashboard/AgentCard";
 import { AgentChatTree } from "../components/dashboard/AgentChatTree";
+import { KPICards } from "../components/dashboard/KPICards";
 import { agentsData } from "../components/dashboard/agentsData";
-import type { Agent } from "../components/dashboard/AgentCard";
+import { fetchAgents } from "../services/dashboardApi";
+import type { Agent } from "../components/dashboard/types";
 
 export function DashboardPage() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "online" | "offline">("all");
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [isLoadingAgents, setIsLoadingAgents] = useState(true);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
 
-  const totalAgents = agentsData.length;
-  const onlineAgents = agentsData.filter((a) => a.online).length;
+  useEffect(() => {
+    const loadAgents = async () => {
+      try {
+        const data = await fetchAgents();
+        setAgents(data);
+        setAgentsError(null);
+      } catch (error) {
+        console.error("Error fetching agents:", error);
+        setAgentsError(error instanceof Error ? error.message : "Error al cargar agentes");
+        setAgents(agentsData);
+      } finally {
+        setIsLoadingAgents(false);
+      }
+    };
+
+    loadAgents();
+  }, []);
+
+  const totalAgents = agents.length;
+  const onlineAgents = agents.filter((a) => a.online).length;
   const offlineAgents = totalAgents - onlineAgents;
 
-  const filteredAgents = agentsData.filter((agent) => {
+  const filteredAgents = agents.filter((agent) => {
     const matchesSearch =
       agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.role.toLowerCase().includes(searchQuery.toLowerCase());
@@ -35,50 +58,25 @@ export function DashboardPage() {
         <DashboardHeader />
 
         <main className="flex-1 overflow-y-auto px-6 py-5">
-          {/* KPI Cards */}
-          <div className="mb-5 grid gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-blue-50 p-3 text-blue-600">
-                  <Users size={22} />
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-slate-800">{totalAgents}</div>
-                  <div className="text-sm text-slate-500">Total de Agentes</div>
-                </div>
-              </div>
-            </div>
+          <KPICards
+            cards={[
+              { icon: <Users size={20} />, label: "Total de Agentes", value: totalAgents, color: "blue" },
+              { icon: <UserCheck size={20} />, label: "Agentes Conectados", value: onlineAgents, color: "emerald" },
+              { icon: <Users size={20} />, label: "Agentes Desconectados", value: offlineAgents, color: "slate" },
+            ]}
+          />
 
-            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-emerald-50 p-3 text-emerald-600">
-                  <UserCheck size={22} />
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-slate-800">{onlineAgents}</div>
-                  <div className="flex items-center gap-1.5 text-sm text-emerald-600">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    Agentes Conectados
-                  </div>
-                </div>
-              </div>
+          {agentsError && (
+            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              Error al cargar agentes: {agentsError}. Usando datos de fallback.
             </div>
+          )}
 
-            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-gray-50 p-3 text-gray-600">
-                  <Users size={22} />
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-slate-800">{offlineAgents}</div>
-                  <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                    <span className="h-2 w-2 rounded-full bg-gray-400" />
-                    Agentes Desconectados
-                  </div>
-                </div>
-              </div>
+          {isLoadingAgents && (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              Cargando agentes desde la API...
             </div>
-          </div>
+          )}
 
           {/* Section title + filters */}
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
