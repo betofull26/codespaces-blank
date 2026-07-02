@@ -1,0 +1,22 @@
+*** Begin Patch
+*** Add File: backend/src/domain/ports/DatabaseRepository.ts
++import type { DatabaseStatus } from '../database.js';
++
++export interface DatabaseRepository {
++  getStatus(): Promise<DatabaseStatus>;
++}
++
+*** End Patch
+
+*** Begin Patch
+*** Update File: backend/src/application/databaseService.ts
+@@
+-import { getDatabaseStatus } from '../infrastructure/database/connection.js';
+-
+-export const getDatabaseHealth = async () => getDatabaseStatus();
++import type { DatabaseRepository } from '../domain/ports/DatabaseRepository.js';
++
++export const makeDatabaseService = (repo: DatabaseRepository) => ({
++  getDatabaseHealth: async () => repo.getStatus(),
++});
+*** End Patch

@@ -147,7 +147,7 @@ export default defineConfig({
     // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
-    mockDashboardApi(),
+    ...(process.env.VITE_USE_MOCK_API === 'true' ? [mockDashboardApi()] : []),
   ],
   resolve: {
     alias: {

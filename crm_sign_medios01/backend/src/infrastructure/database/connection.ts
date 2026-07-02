@@ -1,3 +1,4 @@
+import type { DatabaseRepository } from '../../domain/ports/DatabaseRepository.js';
 import { config } from '../../common/config.js';
 import { buildTableStatusRows, type DatabaseStatus } from '../../domain/database.js';
 
@@ -17,7 +18,13 @@ export const getDatabaseClient = async (): Promise<DatabaseClient> => {
     throw new Error('DATABASE_URL is not configured');
   }
 
-  const { Pool } = await import('pg');
+  const pgModule = await import('pg');
+  const Pool = pgModule.Pool ?? pgModule.default?.Pool;
+
+  if (!Pool) {
+    throw new Error('Unable to load pg Pool constructor');
+  }
+
   const pool = new Pool({ connectionString: config.databaseUrl });
 
   client = {
@@ -34,9 +41,11 @@ export const getDatabaseClient = async (): Promise<DatabaseClient> => {
   return client;
 };
 
-export const getDatabaseStatus = async (): Promise<DatabaseStatus> => {
+export const getDatabaseStatus = async (
+  clientProvider: () => Promise<DatabaseClient> = getDatabaseClient,
+): Promise<DatabaseStatus> => {
   try {
-    const db = await getDatabaseClient();
+    const db = await clientProvider();
     const rows = (await db.query(
       `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
     )) as Array<{ table_name: string }>;
@@ -57,3 +66,9 @@ export const getDatabaseStatus = async (): Promise<DatabaseStatus> => {
     };
   }
 };
+
+export const makePgDatabaseRepository = (
+  clientProvider: () => Promise<DatabaseClient> = getDatabaseClient,
+): DatabaseRepository => ({
+  getStatus: () => getDatabaseStatus(clientProvider),
+});

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { Home, BookUser, PlugZap, FileText, User, Settings, LogOut, SlidersHorizontal } from "lucide-react";
+import { Home, BookUser, Smartphone, FileText, User, Settings, LogOut, SlidersHorizontal } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import companyLogo from "../../../imports/IMG_20260602_130639_278.jpg";
@@ -81,10 +81,10 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
             ].join(" ")}
             onClick={() => navigate("/conexion-dispositivos")}
           >
-            <PlugZap
-              size={18}
-              className={selectedNode === "conexion-dispositivos" ? "text-blue-600" : "text-slate-500"}
-            />
+            <Smartphone
+                size={18}
+                className={selectedNode === "conexion-dispositivos" ? "text-blue-600" : "text-slate-500"}
+              />
             <span className="flex-1 truncate">Conexión de Dispositivos</span>
             {selectedNode === "conexion-dispositivos" && (
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
@@ -143,9 +143,7 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-slate-800">Supervisor</p>
-                <p className="truncate text-xs text-slate-500">{userEmail}</p>
               </div>
-              <Settings size={15} className="shrink-0 text-slate-400" />
             </button>
           </DropdownMenu.Trigger>
 
@@ -156,15 +154,6 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
               side="top"
               align="start"
             >
-              <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100">
-                <User size={15} />
-                Mi Perfil
-              </DropdownMenu.Item>
-              <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100">
-                <Settings size={15} />
-                Configuración
-              </DropdownMenu.Item>
-              <DropdownMenu.Separator className="my-1.5 h-px bg-slate-200" />
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 outline-none transition-colors hover:bg-red-50 focus:bg-red-50"
                 onSelect={handleLogout}

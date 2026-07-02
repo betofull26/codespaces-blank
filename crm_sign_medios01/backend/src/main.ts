@@ -1,25 +1,17 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
 import { config } from './common/config.js';
-import { buildErrorResponse } from './common/apiResponse.js';
-import { healthRouter } from './infrastructure/http/routes/healthRoute.js';
-import { databaseRouter } from './infrastructure/http/routes/databaseRoute.js';
-import { bootstrapRouter } from './infrastructure/http/routes/bootstrapRoute.js';
+import { makePgDatabaseRepository } from './infrastructure/database/connection.js';
+import { makePgConversationRepository } from './infrastructure/database/conversationRepository.js';
+import { makeDatabaseService } from './application/databaseService.js';
+import { makeConversationService } from './application/conversationService.js';
+import { initializeDatabase } from './infrastructure/database/init.js';
+import { createApp } from './app.js';
 
-const app = express();
+const dbRepo = makePgDatabaseRepository();
+const dbService = makeDatabaseService(dbRepo);
+const conversationRepo = makePgConversationRepository();
+const conversationService = makeConversationService(conversationRepo);
 
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
-
-app.use('/api', healthRouter);
-app.use('/api', databaseRouter);
-app.use('/api', bootstrapRouter);
-
-app.use((_req, res) => {
-  res.status(404).json(buildErrorResponse('Ruta no encontrada', 'NOT_FOUND'));
-});
+const app = createApp(dbService, { initializeDatabase }, conversationService);
 
 app.listen(config.port, () => {
   console.log(`Backend running on port ${config.port}`);

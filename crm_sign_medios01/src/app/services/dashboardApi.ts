@@ -1,14 +1,31 @@
 import type { Agent, Conversation, ChatMessage } from "../components/dashboard/types";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api';
 
-function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    return response.text().then((message) => {
-      throw new Error(message || `API error: ${response.status}`);
-    });
+async function handleResponse<T>(response: Response): Promise<T> {
+  const json = await response.json().catch(() => null);
+
+  if (response.ok) {
+    if (json && typeof json === 'object' && 'data' in json) {
+      return (json as any).data as T;
+    }
+    return json as T;
   }
-  return response.json();
+
+  const contentType = response.headers.get('content-type') ?? '';
+  let errorMessage = `API error: ${response.status}`;
+
+  if (contentType.includes('application/json')) {
+    const data = await response.json().catch(() => null);
+    if (data && typeof data === 'object') {
+      errorMessage = (data as any).error || (data as any).message || JSON.stringify(data);
+    }
+  } else {
+    const text = await response.text().catch(() => '');
+    if (text) errorMessage = text;
+  }
+
+  throw new Error(errorMessage);
 }
 
 export async function fetchAgents(): Promise<Agent[]> {

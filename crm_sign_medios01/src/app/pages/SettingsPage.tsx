@@ -676,21 +676,7 @@ export function SettingsPage() {
                   <UserRecordManagement />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    <Users size={14} className="text-blue-600" />
-                    Miembros del equipo ({members.length})
-                  </h4>
-                  {members.map((m) => (
-                    <MemberRow
-                      key={m.id}
-                      member={m}
-                      onChangeRole={handleChangeRole}
-                      onToggleSuspend={handleToggleSuspend}
-                      onRemove={handleRemove}
-                    />
-                  ))}
-                </div>
+                {/* Sección de miembros removida por petición: no dejar rastro en la UI */}
               </div>
 
               {/* ── Right col: role reference ── */}
@@ -700,17 +686,19 @@ export function SettingsPage() {
                   <h3 className="font-semibold text-slate-800">Roles disponibles</h3>
                 </div>
 
-                {(Object.entries(roleConfig) as [Role, (typeof roleConfig)[Role]][]).map(([role, cfg]) => (
-                  <div key={role} className="flex gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className={["flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base", cfg.bg, cfg.color].join(" ")}>
-                      {cfg.icon}
+                {(Object.entries(roleConfig) as [Role, (typeof roleConfig)[Role]][])
+                  .filter(([role]) => role !== "Solo lectura")
+                  .map(([role, cfg]) => (
+                    <div key={role} className="flex gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className={["flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base", cfg.bg, cfg.color].join(" ")}>
+                        {cfg.icon}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{role}</p>
+                        <p className="mt-0.5 text-xs text-slate-500 leading-relaxed">{cfg.desc}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">{role}</p>
-                      <p className="mt-0.5 text-xs text-slate-500 leading-relaxed">{cfg.desc}</p>
-                    </div>
-                  </div>
-                ))}
+                  ))}
 
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
                   <p className="flex items-start gap-2 text-xs text-blue-700">
