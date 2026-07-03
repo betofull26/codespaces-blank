@@ -6,12 +6,9 @@ import JSZip from "jszip";
 import { UserRecordManagement } from "../components/dashboard/UserRecordManagement";
 import {
   Download, MessageSquare, Users, HardDrive, CheckCircle2, Loader2,
-  Clock, FileJson, FileText, ShieldCheck, AlertCircle, SlidersHorizontal,
-  UserPlus, Mail, ChevronDown, Trash2, RefreshCw, Crown, Eye,
-  UserCog, Shield, Send, X, MoreVertical, BadgeCheck,
+  Clock, FileText, ShieldCheck, AlertCircle, SlidersHorizontal,
+  Mail, Crown, UserCog, Shield, X,
 } from "lucide-react";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import * as Select from "@radix-ui/react-select";
 
 /* ══════════════════════════════════════════════════════
    TYPES
@@ -19,19 +16,7 @@ import * as Select from "@radix-ui/react-select";
 type BackupStatus = "idle" | "running" | "done" | "error";
 type BackupRecord = { label: string; time: string; type: "chats" | "contacts" | "full" };
 
-type Role = "Administrador" | "Supervisor" | "Agente" | "Solo lectura";
-type MemberStatus = "activo" | "pendiente" | "suspendido";
-
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  status: MemberStatus;
-  joinedAt: string;
-  initials: string;
-  avatarColor: string;
-}
+type Role = "Administrador" | "Supervisor" | "Agente";
 
 /* ══════════════════════════════════════════════════════
    MOCK DATA
@@ -42,15 +27,6 @@ const mockContacts = [
   { id: "3", name: "Ana Martínez",    phone: "+52 55 2468 1357", assignedTo: "Miguel Torres" },
   { id: "4", name: "Carlos López",    phone: "+52 55 9876 5432", assignedTo: null },
   { id: "5", name: "Laura Fernández", phone: "+52 55 3691 2580", assignedTo: "Sofía Vargas" },
-];
-
-const initialMembers: TeamMember[] = [
-  { id: "m1", name: "Supervisor SIGN", email: "supervisor@signmedios.com", role: "Administrador", status: "activo",    joinedAt: "01/01/2025", initials: "SS", avatarColor: "bg-blue-600" },
-  { id: "m2", name: "Carlos Mendoza",  email: "cmendoza@signmedios.com",   role: "Supervisor",   status: "activo",    joinedAt: "15/02/2025", initials: "CM", avatarColor: "bg-emerald-600" },
-  { id: "m3", name: "María Torres",    email: "mtorres@signmedios.com",    role: "Agente",       status: "activo",    joinedAt: "10/03/2025", initials: "MT", avatarColor: "bg-purple-600" },
-  { id: "m4", name: "Andrés Vargas",   email: "avargas@signmedios.com",    role: "Agente",       status: "activo",    joinedAt: "22/03/2025", initials: "AV", avatarColor: "bg-amber-600" },
-  { id: "m5", name: "Gabriela Ruiz",   email: "gruiz@signmedios.com",      role: "Supervisor",   status: "activo",    joinedAt: "05/04/2025", initials: "GR", avatarColor: "bg-rose-600" },
-  { id: "m6", name: "Luis Castillo",   email: "lcastillo@signmedios.com",  role: "Solo lectura", status: "suspendido",joinedAt: "18/04/2025", initials: "LC", avatarColor: "bg-slate-500" },
 ];
 
 /* ══════════════════════════════════════════════════════
@@ -92,42 +68,6 @@ function chatTranscript(agentName: string, conversation: { clientName: string; t
   return `${header}${body}`;
 }
 
-function decodeDataUrl(dataUrl: string): Uint8Array {
-  const [meta, data] = dataUrl.split(",");
-  const base64 = meta.includes("base64") ? data : encodeURIComponent(data);
-  const binary = atob(base64);
-  const array = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) array[i] = binary.charCodeAt(i);
-  return array;
-}
-
-async function attachmentToFile(attachment: any) {
-  const filename = attachment.name || "adjunto.bin";
-  if (typeof attachment.content === "string") {
-    return { path: filename, content: attachment.content };
-  }
-  if (typeof attachment.url === "string" && attachment.url.startsWith("data:")) {
-    return { path: filename, content: decodeDataUrl(attachment.url) };
-  }
-  if (typeof attachment.url === "string" && attachment.url.startsWith("http")) {
-    try {
-      const response = await fetch(attachment.url);
-      const blob = await response.blob();
-      return { path: filename, content: blob };
-    } catch {
-      return { path: `${filename}.txt`, content: `No se pudo descargar el adjunto desde ${attachment.url}` };
-    }
-  }
-  return { path: `${filename}.txt`, content: `Adjunto: ${attachment.name || "archivo"}` };
-}
-
-async function createZip(files: Array<{ path: string; content: string | Blob | ArrayBuffer | Uint8Array }>, filename: string) {
-  const zip = new JSZip();
-  files.forEach((file) => zip.file(file.path, file.content));
-  const blob = await zip.generateAsync({ type: "blob" });
-  downloadBlob(blob, filename);
-}
-
 async function simulate(setter: (s: BackupStatus) => void, fn: () => Promise<void> | void, onRecord: () => void) {
   setter("running");
   setTimeout(async () => {
@@ -158,18 +98,6 @@ const roleConfig: Record<Role, { icon: React.ReactNode; color: string; bg: strin
     bg: "bg-amber-100",
     desc: "Accede solo a sus propias conversaciones y contactos asignados.",
   },
-  "Solo lectura": {
-    icon: <Eye size={13} />,
-    color: "text-slate-600",
-    bg: "bg-slate-100",
-    desc: "Puede visualizar información pero no realizar cambios.",
-  },
-};
-
-const statusConfig: Record<MemberStatus, { label: string; cls: string; dot: string }> = {
-  activo:     { label: "Activo",     cls: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
-  pendiente:  { label: "Pendiente",  cls: "bg-amber-100 text-amber-700",     dot: "bg-amber-400" },
-  suspendido: { label: "Suspendido", cls: "bg-red-100 text-red-600",         dot: "bg-red-400" },
 };
 
 /* ══════════════════════════════════════════════════════
@@ -187,10 +115,11 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
   );
 }
 
-function BackupCard({ icon, title, description, formats, status, onBackupZip, onBackupCSV }: {
+function BackupCard({ icon, title, description, formats, status, onBackupZip, onBackupCSV, children }: {
   icon: React.ReactNode; title: string; description: string;
   formats: ("zip" | "csv")[]; status: BackupStatus;
   onBackupZip?: () => void; onBackupCSV?: () => void;
+  children?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -202,6 +131,7 @@ function BackupCard({ icon, title, description, formats, status, onBackupZip, on
         </div>
         {status === "done" && <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-500" />}
       </div>
+      {children}
       <div className="flex flex-wrap gap-2">
         {formats.includes("zip") && onBackupZip && (
           <button onClick={onBackupZip} disabled={status === "running"}
@@ -241,45 +171,6 @@ function RoleBadge({ role }: { role: Role }) {
   );
 }
 
-/* Status badge */
-function StatusBadge({ status }: { status: MemberStatus }) {
-  const cfg = statusConfig[status];
-  return (
-    <span className={["inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", cfg.cls].join(" ")}>
-      <span className={["h-1.5 w-1.5 rounded-full", cfg.dot].join(" ")} />
-      {cfg.label}
-    </span>
-  );
-}
-
-/* Radix Select wrapper for role picker */
-function RoleSelect({ value, onChange }: { value: Role; onChange: (r: Role) => void }) {
-  const roles: Role[] = ["Administrador", "Supervisor", "Agente", "Solo lectura"];
-  return (
-    <Select.Root value={value} onValueChange={(v) => onChange(v as Role)}>
-      <Select.Trigger className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200">
-        <Select.Value />
-        <Select.Icon><ChevronDown size={14} className="text-slate-400" /></Select.Icon>
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content className="z-50 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
-          <Select.Viewport>
-            {roles.map((r) => (
-              <Select.Item key={r} value={r}
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none hover:bg-slate-100 focus:bg-slate-100">
-                <span className={["flex items-center gap-1", roleConfig[r].color].join(" ")}>
-                  {roleConfig[r].icon}
-                </span>
-                <Select.ItemText>{r}</Select.ItemText>
-              </Select.Item>
-            ))}
-          </Select.Viewport>
-        </Select.Content>
-      </Select.Portal>
-    </Select.Root>
-  );
-}
-
 /* Pending invitation row */
 interface Invitation { id: string; email: string; role: Role; sentAt: string }
 
@@ -304,98 +195,6 @@ function InvitationRow({ inv, onRevoke }: { inv: Invitation; onRevoke: (id: stri
   );
 }
 
-/* Member row */
-function MemberRow({ member, onChangeRole, onToggleSuspend, onRemove }: {
-  member: TeamMember;
-  onChangeRole: (id: string, role: Role) => void;
-  onToggleSuspend: (id: string) => void;
-  onRemove: (id: string) => void;
-}) {
-  const isCurrentUser = member.id === "m1";
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md">
-      {/* Avatar */}
-      <div className={["flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white", member.avatarColor].join(" ")}>
-        {member.initials}
-      </div>
-
-      {/* Info */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-slate-800">{member.name}</p>
-          {isCurrentUser && (
-            <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-              <BadgeCheck size={10} /> Tú
-            </span>
-          )}
-        </div>
-        <p className="truncate text-xs text-slate-500">{member.email}</p>
-        <p className="mt-0.5 text-[11px] text-slate-400">Desde {member.joinedAt}</p>
-      </div>
-
-      {/* Role */}
-      <div className="hidden sm:block">
-        <RoleBadge role={member.role} />
-      </div>
-
-      {/* Status */}
-      <StatusBadge status={member.status} />
-
-      {/* Actions */}
-      {!isCurrentUser && (
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <button className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
-              <MoreVertical size={16} />
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              className="z-50 min-w-[200px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"
-              sideOffset={5} align="end">
-              {/* Change role submenu */}
-              <DropdownMenu.Sub>
-                <DropdownMenu.SubTrigger className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none hover:bg-slate-100">
-                  <UserCog size={14} /> Cambiar rol
-                  <ChevronDown size={12} className="ml-auto -rotate-90" />
-                </DropdownMenu.SubTrigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.SubContent className="z-50 min-w-[180px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg" sideOffset={4}>
-                    {(["Administrador","Supervisor","Agente","Solo lectura"] as Role[]).map((r) => (
-                      <DropdownMenu.Item key={r}
-                        className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none hover:bg-slate-100"
-                        onSelect={() => onChangeRole(member.id, r)}>
-                        <span className={roleConfig[r].color}>{roleConfig[r].icon}</span>
-                        {r}
-                        {member.role === r && <CheckCircle2 size={12} className="ml-auto text-blue-500" />}
-                      </DropdownMenu.Item>
-                    ))}
-                  </DropdownMenu.SubContent>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Sub>
-
-              <DropdownMenu.Item
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none hover:bg-slate-100"
-                onSelect={() => onToggleSuspend(member.id)}>
-                <RefreshCw size={14} />
-                {member.status === "suspendido" ? "Reactivar acceso" : "Suspender acceso"}
-              </DropdownMenu.Item>
-
-              <DropdownMenu.Separator className="my-1.5 h-px bg-slate-200" />
-
-              <DropdownMenu.Item
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 outline-none hover:bg-red-50"
-                onSelect={() => onRemove(member.id)}>
-                <Trash2 size={14} /> Eliminar del equipo
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-      )}
-    </div>
-  );
-}
-
 /* ══════════════════════════════════════════════════════
    TABS
 ══════════════════════════════════════════════════════ */
@@ -415,10 +214,13 @@ export function SettingsPage() {
   const [chatsStatus,    setChatsStatus]    = useState<BackupStatus>("idle");
   const [contactsStatus, setContactsStatus] = useState<BackupStatus>("idle");
   const [fullStatus,     setFullStatus]     = useState<BackupStatus>("idle");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(agentsData[0]?.id ?? "");
   const [history, setHistory] = useState<BackupRecord[]>([]);
 
-  const totalChats = agentsData.reduce((a, ag) => a + ag.conversations.length, 0);
-  const totalMsgs  = agentsData.reduce((a, ag) => a + ag.conversations.reduce((s, c) => s + c.messages.length, 0), 0);
+  const totalChats = agentsData.reduce((a, ag) => a + (ag.conversations?.length ?? 0), 0);
+  const selectedAgent = agentsData.find((agent) => agent.id === selectedAgentId) ?? agentsData[0] ?? null;
+  const selectedAgentConversations = selectedAgent?.conversations ?? [];
+  const totalMsgs  = agentsData.reduce((a, ag) => a + (ag.conversations?.reduce((s, c) => s + c.messages.length, 0) ?? 0), 0);
 
   const addRecord = (r: BackupRecord) => setHistory((h) => [r, ...h]);
 
@@ -426,14 +228,42 @@ export function SettingsPage() {
     simulate(setChatsStatus, async () => {
       const zip = new JSZip();
 
-      // No chat conversations available without the agent panel.
+      if (selectedAgent) {
+        const agentNameSafe = selectedAgent.name.replace(/\s+/g, "_");
+        const summary = [
+          `Agente: ${selectedAgent.name}`,
+          `Rol: ${selectedAgent.role}`,
+          `Conversaciones: ${selectedAgentConversations.length}`,
+          `Mensajes: ${selectedAgentConversations.reduce((sum, conversation) => sum + conversation.messages.length, 0)}`,
+          "",
+        ].join("\n");
+        zip.file("resumen.txt", summary);
+
+        selectedAgentConversations.forEach((conversation, index) => {
+          const fileName = `chats/${agentNameSafe}/${String(index + 1).padStart(2, "0")}_${conversation.clientName.replace(/\s+/g, "_")}.txt`;
+          zip.file(fileName, chatTranscript(selectedAgent.name, {
+            clientName: conversation.clientName,
+            topic: conversation.topic,
+            status: conversation.status,
+            startTime: conversation.startTime,
+            messages: conversation.messages.map((msg) => ({
+              type: msg.sender === "agent" ? "whatsapp_out" : msg.sender === "client" ? "whatsapp_in" : "note",
+              text: msg.text,
+              time: msg.time,
+            })),
+          }));
+        });
+      } else {
+        zip.file("resumen.txt", "No hay agente seleccionado para respaldar.");
+      }
+
       const content = await zip.generateAsync({ type: "blob" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(content);
-      a.download = `chats_signmedios_${Date.now()}.zip`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }, () => addRecord({ label: "Respaldo de chats (ZIP)", time: timestamp(), type: "chats" }));
+      downloadBlob(content, `chats_${selectedAgent ? selectedAgent.name.replace(/\s+/g, "_").toLowerCase() : "agente"}_${Date.now()}.zip`);
+    }, () => addRecord({
+      label: `Respaldo de chats (ZIP) - ${selectedAgent?.name ?? "agente"}`,
+      time: timestamp(),
+      type: "chats",
+    }));
 
   const backupContactsCSV = () =>
     simulate(setContactsStatus, () => downloadCSV(
@@ -460,7 +290,6 @@ export function SettingsPage() {
     }, () => addRecord({ label: "Respaldo completo (ZIP)", time: timestamp(), type: "full" }));
 
   /* ── team state ── */
-  const [members,     setMembers]     = useState<TeamMember[]>(initialMembers);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [invEmail,    setInvEmail]    = useState("");
   const [invRole,     setInvRole]     = useState<Role>("Agente");
@@ -472,8 +301,8 @@ export function SettingsPage() {
     const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!invEmail.trim()) { setInvError("Ingresa un correo electrónico."); return; }
     if (!emailRx.test(invEmail)) { setInvError("El correo no tiene un formato válido."); return; }
-    if (members.some((m) => m.email === invEmail) || invitations.some((i) => i.email === invEmail)) {
-      setInvError("Este correo ya está registrado o tiene una invitación pendiente."); return;
+    if (invitations.some((i) => i.email === invEmail)) {
+      setInvError("Este correo ya tiene una invitación pendiente."); return;
     }
     setInvError("");
     setInvSending(true);
@@ -491,21 +320,6 @@ export function SettingsPage() {
 
   const handleRevokeInvite = (id: string) =>
     setInvitations((prev) => prev.filter((i) => i.id !== id));
-
-  const handleChangeRole = (id: string, role: Role) =>
-    setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, role } : m)));
-
-  const handleToggleSuspend = (id: string) =>
-    setMembers((prev) =>
-      prev.map((m) =>
-        m.id === id ? { ...m, status: m.status === "suspendido" ? "activo" : "suspendido" } : m
-      )
-    );
-
-  const handleRemove = (id: string) => {
-    if (confirm("¿Confirmas que deseas eliminar este miembro del equipo?"))
-      setMembers((prev) => prev.filter((m) => m.id !== id));
-  };
 
   const typeIcon = (t: BackupRecord["type"]) => ({
     chats:    <MessageSquare size={13} className="text-blue-500" />,
@@ -568,11 +382,29 @@ export function SettingsPage() {
                   <BackupCard
                     icon={<MessageSquare size={18} />}
                     title="Respaldo de Chats"
-                    description={`Exporta el historial completo de ${totalChats} conversaciones y ${totalMsgs} mensajes de todos los agentes.`}
+                    description={selectedAgent ? `Exporta el historial del agente ${selectedAgent.name} (${selectedAgentConversations.length} conversaciones).` : "Selecciona un agente para descargar su historial de chats."}
                     formats={["zip"]}
                     status={chatsStatus}
                     onBackupZip={backupChatsZip}
-                  />
+                  >
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <label htmlFor="agent-backup-select" className="mb-2 block text-sm font-medium text-slate-700">
+                        Selecciona el agente cuyos chats deseas descargar
+                      </label>
+                      <select
+                        id="agent-backup-select"
+                        value={selectedAgentId}
+                        onChange={(event) => setSelectedAgentId(event.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
+                      >
+                        {agentsData.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name} — {agent.role}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </BackupCard>
                   <BackupCard
                     icon={<Users size={18} />}
                     title="Respaldo de Contactos"
@@ -676,21 +508,6 @@ export function SettingsPage() {
                   <UserRecordManagement />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    <Users size={14} className="text-blue-600" />
-                    Miembros del equipo ({members.length})
-                  </h4>
-                  {members.map((m) => (
-                    <MemberRow
-                      key={m.id}
-                      member={m}
-                      onChangeRole={handleChangeRole}
-                      onToggleSuspend={handleToggleSuspend}
-                      onRemove={handleRemove}
-                    />
-                  ))}
-                </div>
               </div>
 
               {/* ── Right col: role reference ── */}

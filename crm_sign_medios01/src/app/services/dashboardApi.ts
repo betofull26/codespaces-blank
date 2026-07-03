@@ -1,29 +1,16 @@
 import type { Agent, Conversation, ChatMessage } from "../components/dashboard/types";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
-
-function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    return response.text().then((message) => {
-      throw new Error(message || `API error: ${response.status}`);
-    });
-  }
-  return response.json();
-}
+import { requestJson } from "./apiClient";
 
 export async function fetchAgents(): Promise<Agent[]> {
-  const response = await fetch(`${API_BASE}/agents`);
-  return handleResponse<Agent[]>(response);
+  return requestJson<Agent[]>("/agents");
 }
 
 export async function fetchAgentConversations(agentId: string): Promise<Conversation[]> {
-  const response = await fetch(`${API_BASE}/agents/${encodeURIComponent(agentId)}/conversations`);
-  return handleResponse<Conversation[]>(response);
+  return requestJson<Conversation[]>(`/agents/${encodeURIComponent(agentId)}/conversations`);
 }
 
 export async function fetchConversationMessages(conversationId: string): Promise<ChatMessage[]> {
-  const response = await fetch(`${API_BASE}/conversations/${encodeURIComponent(conversationId)}/messages`);
-  return handleResponse<ChatMessage[]>(response);
+  return requestJson<ChatMessage[]>(`/conversations/${encodeURIComponent(conversationId)}/messages`);
 }
 
 export interface InterventionPayload {
@@ -34,23 +21,19 @@ export interface InterventionPayload {
 
 export async function postConversationIntervention(
   conversationId: string,
-  payload: InterventionPayload
+  payload: InterventionPayload,
 ): Promise<ChatMessage> {
-  const response = await fetch(`${API_BASE}/conversations/${encodeURIComponent(conversationId)}/interventions`, {
+  return requestJson<ChatMessage>(`/conversations/${encodeURIComponent(conversationId)}/interventions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return handleResponse<ChatMessage>(response);
 }
 
 export async function updateConversationStatus(conversationId: string, status: string): Promise<Conversation> {
-  const response = await fetch(`${API_BASE}/conversations/${encodeURIComponent(conversationId)}`, {
+  return requestJson<Conversation>(`/conversations/${encodeURIComponent(conversationId)}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
   });
-  return handleResponse<Conversation>(response);
 }
 
 export interface WhatsAppWebhookPayload {
@@ -63,10 +46,8 @@ export interface WhatsAppWebhookPayload {
 }
 
 export async function postWhatsAppWebhook(payload: WhatsAppWebhookPayload): Promise<{ success: boolean }> {
-  const response = await fetch(`${API_BASE}/whatsapp/webhook`, {
+  return requestJson<{ success: boolean }>("/whatsapp/webhook", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return handleResponse<{ success: boolean }>(response);
 }

@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { Camera, Upload, X } from "lucide-react";
 import * as Label from "@radix-ui/react-label";
-import * as Select from "@radix-ui/react-select";
-import { ChevronDown } from "lucide-react";
-import type { UserRecord } from "./UserRecordManagement";
+import type { UserRecord, UserRole } from "./UserRecordManagement";
+
+function splitName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: "", lastName: "" };
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}
 
 interface UserRecordFormProps {
   initialData?: UserRecord;
@@ -11,41 +15,44 @@ interface UserRecordFormProps {
   onCancel: () => void;
 }
 
-interface FormErrors {
-  name?: string;
-  position?: string;
-  assignedPhone?: string;
-  deviceModel?: string;
-  serialNumber?: string;
-  entryDate?: string;
-}
-
 export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFormProps) {
+  const { firstName: initialFirstName, lastName: initialLastName } = splitName(initialData?.name || "");
+
   const [formData, setFormData] = useState({
-    name: initialData?.name || "",
+    firstName: initialFirstName,
+    lastName: initialLastName,
     position: initialData?.position || "",
     assignedPhone: initialData?.assignedPhone || "",
     deviceModel: initialData?.deviceModel || "",
     deviceNumber: initialData?.deviceNumber || "",
     serialNumber: initialData?.serialNumber || "",
+    serialNumber2: initialData?.serialNumber2 || "",
     photo: initialData?.photo || "",
     entryDate: initialData?.entryDate || "",
+    username: initialData?.username || "",
+    password: initialData?.password || "",
+    role: initialData?.role || ("Agente" as UserRole),
   });
 
-  const [errors, setErrors] = useState<FormErrors>({});
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(initialData?.photo);
-
-  const validate = (): boolean => {
-    // Validation removed per request — allow empty fields
-    setErrors({});
-    return true;
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (validate()) {
-      onSubmit(formData);
-    }
+    const payload = {
+      name: `${formData.firstName} ${formData.lastName}`.trim(),
+      position: formData.position,
+      assignedPhone: formData.assignedPhone,
+      deviceModel: formData.deviceModel,
+      deviceNumber: formData.deviceNumber,
+      serialNumber: formData.serialNumber,
+      serialNumber2: formData.serialNumber2,
+      photo: formData.photo,
+      entryDate: formData.entryDate,
+      username: formData.username,
+      password: formData.password,
+      role: formData.role,
+    };
+    onSubmit(payload);
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,18 +76,13 @@ export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFo
   return (
     <form onSubmit={handleSubmit} className="mt-6">
       <div className="grid gap-5 md:grid-cols-2">
-        {/* Photo Upload */}
         <div className="md:col-span-2">
           <Label.Root className="text-sm font-semibold text-black">Foto de Perfil</Label.Root>
           <div className="mt-2 flex items-center gap-4">
             <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-slate-50">
               {photoPreview ? (
                 <>
-                  <img
-                    src={photoPreview}
-                    alt="Preview"
-                    className="h-full w-full object-cover"
-                  />
+                  <img src={photoPreview} alt="Preview" className="h-full w-full object-cover" />
                   <button
                     type="button"
                     onClick={clearPhoto}
@@ -96,199 +98,150 @@ export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFo
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50">
               <Upload size={16} />
               Subir Imagen
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoUpload}
-                className="hidden"
-              />
+              <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
             </label>
           </div>
         </div>
 
-        {/* Name */}
-        <div className="md:col-span-2">
-          <Label.Root htmlFor="name" className="text-sm font-semibold text-black">
-            Nombre Completo
-          </Label.Root>
+        <div>
+          <Label.Root htmlFor="firstName" className="text-sm font-semibold text-black">Nombre</Label.Root>
           <input
-            id="name"
+            id="firstName"
             type="text"
-            value={formData.name}
-            onChange={(e) => {
-              setFormData((prev) => ({ ...prev, name: e.target.value }));
-              setErrors((prev) => ({ ...prev, name: undefined }));
-            }}
-            placeholder="María González Pérez"
-            className={[
-              "mt-1.5 w-full rounded-xl border bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400",
-              "outline-none transition-all duration-150 focus:bg-white focus:ring-3",
-              errors.name
-                ? "border-red-400 focus:border-red-500 focus:ring-red-400/15"
-                : "border-gray-200 focus:border-blue-500 focus:ring-blue-500/15",
-            ].join(" ")}
+            value={formData.firstName}
+            onChange={(e) => setFormData((prev) => ({ ...prev, firstName: e.target.value }))}
+            placeholder="María"
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
           />
-          {errors.name && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
-              <span>•</span> {errors.name}
-            </p>
-          )}
         </div>
 
-        {/* Position (now text input) */}
+        <div>
+          <Label.Root htmlFor="lastName" className="text-sm font-semibold text-black">Apellidos</Label.Root>
+          <input
+            id="lastName"
+            type="text"
+            value={formData.lastName}
+            onChange={(e) => setFormData((prev) => ({ ...prev, lastName: e.target.value }))}
+            placeholder="González Pérez"
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
+          />
+        </div>
+
         <div>
           <Label.Root className="text-sm font-semibold text-black">Cargo</Label.Root>
           <input
             type="text"
             value={formData.position}
-            onChange={(e) => {
-              setFormData((prev) => ({ ...prev, position: e.target.value }));
-              setErrors((prev) => ({ ...prev, position: undefined }));
-            }}
+            onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
             placeholder="Ejecutivo de Ventas"
-            className={[
-              "mt-1.5 w-full rounded-xl border bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400",
-              "outline-none transition-all duration-150 focus:bg-white focus:ring-3",
-              errors.position
-                ? "border-red-400 focus:border-red-500 focus:ring-red-400/15"
-                : "border-gray-200 focus:border-blue-500 focus:ring-blue-500/15",
-            ].join(" ")}
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
           />
         </div>
 
-        {/* Entry Date */}
         <div>
-          <Label.Root htmlFor="entryDate" className="text-sm font-semibold text-black">
-            Fecha de Ingreso
-          </Label.Root>
+          <Label.Root htmlFor="entryDate" className="text-sm font-semibold text-black">Fecha de Ingreso</Label.Root>
           <input
             id="entryDate"
             type="date"
             value={formData.entryDate}
-            onChange={(e) => {
-              setFormData((prev) => ({ ...prev, entryDate: e.target.value }));
-              setErrors((prev) => ({ ...prev, entryDate: undefined }));
-            }}
-            className={[
-              "mt-1.5 w-full rounded-xl border bg-gray-50 px-3.5 py-2.5 text-sm text-black",
-              "outline-none transition-all duration-150 focus:bg-white focus:ring-3",
-              errors.entryDate
-                ? "border-red-400 focus:border-red-500 focus:ring-red-400/15"
-                : "border-gray-200 focus:border-blue-500 focus:ring-blue-500/15",
-            ].join(" ")}
+            onChange={(e) => setFormData((prev) => ({ ...prev, entryDate: e.target.value }))}
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
           />
-          {errors.entryDate && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
-              <span>•</span> {errors.entryDate}
-            </p>
-          )}
         </div>
 
-        {/* Assigned Phone */}
         <div>
-          <Label.Root htmlFor="assignedPhone" className="text-sm font-semibold text-black">
-            Teléfono Asignado
-          </Label.Root>
+          <Label.Root htmlFor="assignedPhone" className="text-sm font-semibold text-black">Teléfono Asignado</Label.Root>
           <input
             id="assignedPhone"
             type="tel"
             value={formData.assignedPhone}
-            onChange={(e) => {
-              setFormData((prev) => ({ ...prev, assignedPhone: e.target.value }));
-              setErrors((prev) => ({ ...prev, assignedPhone: undefined }));
-            }}
+            onChange={(e) => setFormData((prev) => ({ ...prev, assignedPhone: e.target.value }))}
             placeholder="+58 412-1234567"
-            className={[
-              "mt-1.5 w-full rounded-xl border bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400",
-              "outline-none transition-all duration-150 focus:bg-white focus:ring-3",
-              errors.assignedPhone
-                ? "border-red-400 focus:border-red-500 focus:ring-red-400/15"
-                : "border-gray-200 focus:border-blue-500 focus:ring-blue-500/15",
-            ].join(" ")}
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
           />
-          {errors.assignedPhone && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
-              <span>•</span> {errors.assignedPhone}
-            </p>
-          )}
         </div>
 
-        {/* Device Model */}
         <div>
-          <Label.Root htmlFor="deviceModel" className="text-sm font-semibold text-black">
-            Modelo de Dispositivo
-          </Label.Root>
+          <Label.Root htmlFor="deviceModel" className="text-sm font-semibold text-black">Modelo de Dispositivo</Label.Root>
           <input
             id="deviceModel"
             type="text"
             value={formData.deviceModel}
-            onChange={(e) => {
-              setFormData((prev) => ({ ...prev, deviceModel: e.target.value }));
-              setErrors((prev) => ({ ...prev, deviceModel: undefined }));
-            }}
+            onChange={(e) => setFormData((prev) => ({ ...prev, deviceModel: e.target.value }))}
             placeholder="iPhone 14 Pro"
-            className={[
-              "mt-1.5 w-full rounded-xl border bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400",
-              "outline-none transition-all duration-150 focus:bg-white focus:ring-3",
-              errors.deviceModel
-                ? "border-red-400 focus:border-red-500 focus:ring-red-400/15"
-                : "border-gray-200 focus:border-blue-500 focus:ring-blue-500/15",
-            ].join(" ")}
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
           />
-          {errors.deviceModel && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
-              <span>•</span> {errors.deviceModel}
-            </p>
-          )}
         </div>
 
-
-        {/* Serial Number */}
         <div>
-          <Label.Root htmlFor="serialNumber" className="text-sm font-semibold text-black">
-            Número de Serie
-          </Label.Root>
+          <Label.Root htmlFor="username" className="text-sm font-semibold text-black">Usuario</Label.Root>
+          <input
+            id="username"
+            type="text"
+            value={formData.username}
+            onChange={(e) => setFormData((prev) => ({ ...prev, username: e.target.value }))}
+            placeholder="usuario01"
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
+          />
+        </div>
+
+        <div>
+          <Label.Root htmlFor="password" className="text-sm font-semibold text-black">Contraseña</Label.Root>
+          <input
+            id="password"
+            type="password"
+            value={formData.password}
+            onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+            placeholder="••••••••"
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
+          />
+        </div>
+
+        <div>
+          <Label.Root htmlFor="serialNumber" className="text-sm font-semibold text-black">Número de Serie 1</Label.Root>
           <input
             id="serialNumber"
             type="text"
             value={formData.serialNumber}
-            onChange={(e) => {
-              setFormData((prev) => ({
-                ...prev,
-                serialNumber: e.target.value.toUpperCase(),
-              }));
-              setErrors((prev) => ({ ...prev, serialNumber: undefined }));
-            }}
+            onChange={(e) => setFormData((prev) => ({ ...prev, serialNumber: e.target.value.toUpperCase() }))}
             placeholder="F2KXH9MNPQ3L"
-            className={[
-              "mt-1.5 w-full rounded-xl border bg-gray-50 px-3.5 py-2.5 font-mono text-sm font-semibold text-black placeholder:text-gray-400",
-              "outline-none transition-all duration-150 focus:bg-white focus:ring-3",
-              errors.serialNumber
-                ? "border-red-400 focus:border-red-500 focus:ring-red-400/15"
-                : "border-gray-200 focus:border-blue-500 focus:ring-blue-500/15",
-            ].join(" ")}
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 font-mono text-sm font-semibold text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
           />
-          {errors.serialNumber && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
-              <span>•</span> {errors.serialNumber}
-            </p>
-          )}
+        </div>
+
+        <div>
+          <Label.Root htmlFor="serialNumber2" className="text-sm font-semibold text-black">Número de Serie 2</Label.Root>
+          <input
+            id="serialNumber2"
+            type="text"
+            value={formData.serialNumber2}
+            onChange={(e) => setFormData((prev) => ({ ...prev, serialNumber2: e.target.value.toUpperCase() }))}
+            placeholder="SN-002-01"
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 font-mono text-sm font-semibold text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
+          />
+        </div>
+
+        <div>
+          <Label.Root htmlFor="role" className="text-sm font-semibold text-black">Rol</Label.Root>
+          <select
+            id="role"
+            value={formData.role}
+            onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
+          >
+            <option value="Administrador">Administrador</option>
+            <option value="Supervisor">Supervisor</option>
+            <option value="Agente">Agente</option>
+            <option value="Suspendido">Suspendido</option>
+          </select>
         </div>
       </div>
 
-      {/* Actions */}
       <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-        >
+        <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
           Cancelar
         </button>
-        <button
-          type="submit"
-          className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-500/25 transition-all hover:bg-blue-700 active:scale-[0.985]"
-        >
+        <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-500/25 transition-all hover:bg-blue-700 active:scale-[0.985]">
           {initialData ? "Guardar Cambios" : "Crear Ficha"}
         </button>
       </div>
