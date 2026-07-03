@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Camera, Search } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { UserRecordForm } from "./UserRecordForm";
+import { createUser, fetchUsers, updateUser, updateUserStatus, type BackendUser } from "../../services/dashboardApi";
+import { getCurrentUser } from "../../lib/auth";
+
+const USER_RECORDS_STORAGE_KEY = "crm-sign-user-records";
 
 export type UserRole = "Administrador" | "Supervisor" | "Agente" | "Suspendido";
 
@@ -21,78 +25,163 @@ export interface UserRecord {
   role: UserRole;
 }
 
-const mockRecords: UserRecord[] = [
-  {
-    id: "1",
-    name: "María González",
-    position: "Ejecutivo de Ventas",
-    assignedPhone: "+52 55 1234 5678",
-    deviceModel: "iPhone 14 Pro",
-    deviceNumber: "5512345678",
-    serialNumber: "F2KXH9MNPQ3L",
-    serialNumber2: "SN-002-01",
-    entryDate: "2024-01-15",
-    username: "mgonzalez",
-    password: "Pass@2026",
-    role: "Agente",
-  },
-  {
-    id: "2",
-    name: "Juan Pérez",
-    position: "Gerente de Zona",
-    assignedPhone: "+52 55 8765 4321",
-    deviceModel: "Samsung Galaxy S23",
-    deviceNumber: "5587654321",
-    serialNumber: "R58NVKDM9X2P",
-    serialNumber2: "SN-002-02",
-    entryDate: "2023-08-22",
-    username: "jperez",
-    password: "Pass@2026",
-    role: "Supervisor",
-  },
-  {
-    id: "3",
-    name: "Ana Martínez",
-    position: "Soporte Técnico",
-    assignedPhone: "+52 55 2468 1357",
-    deviceModel: "iPhone 13",
-    deviceNumber: "5524681357",
-    serialNumber: "C3WYH7TLPK9M",
-    serialNumber2: "SN-002-03",
-    entryDate: "2024-03-10",
-    username: "amartinez",
-    password: "Pass@2026",
-    role: "Administrador",
-  },
-];
-
 export function UserRecordManagement() {
-  const [records, setRecords] = useState<UserRecord[]>(mockRecords);
+  const [records, setRecords] = useState<UserRecord[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<UserRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const handleAddRecord = (record: Omit<UserRecord, "id">) => {
-    const newRecord = {
-      ...record,
-      id: String(Date.now()),
-    };
-    setRecords((prev) => [...prev, newRecord]);
-    setIsFormOpen(false);
+  const persistRecords = (nextRecords: UserRecord[]) => {
+    setRecords(nextRecords);
+    localStorage.setItem(USER_RECORDS_STORAGE_KEY, JSON.stringify(nextRecords));
   };
 
-  const handleEditRecord = (record: Omit<UserRecord, "id">) => {
+  const mapBackendUserToRecord = (user: BackendUser): UserRecord => ({
+    id: user.id,
+    name: user.fullName,
+    position: user.email,
+    assignedPhone: "",
+    deviceModel: "",
+    deviceNumber: "",
+    serialNumber: user.username,
+    serialNumber2: user.role,
+    entryDate: user.createdAt,
+    username: user.username,
+    password: user.passwordHash,
+    role: user.role === "admin" ? "Administrador" : user.role === "supervisor" ? "Supervisor" : "Agente",
+  });
+
+  const buildPayload = (record: Omit<UserRecord, "id">) => ({
+    fullName: record.name,
+    email: record.position,
+    username: record.username,
+    passwordHash: record.password,
+    role: record.role === "Administrador" ? "admin" : record.role === "Supervisor" ? "supervisor" : "agent",
+    status: "active" as const,
+    accessToPanel: record.role !== "Agente",
+  });
+
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    const role = currentUser?.role ?? "agent";
+    const storedRecords = localStorage.getItem(USER_RECORDS_STORAGE_KEY);
+
+    if (storedRecords) {
+      try {
+        const parsed = JSON.parse(storedRecords) as UserRecord[];
+        setRecords(parsed);
+      } catch {
+        localStorage.removeItem(USER_RECORDS_STORAGE_KEY);
+      }
+    }
+
+    fetchUsers(role)
+      .then((users) => {
+        const mapped = users.map(mapBackendUserToRecord);
+        persistRecords(mapped);
+      })
+      .catch(() => {
+        if (!storedRecords) {
+          setRecords([]);
+        }
+      });
+  }, []);
+
+  const handleAddRecord = async (record: Omit<UserRecord, "id">) => {
+    setIsSaving(true);
+    setStatusMessage(null);
+    const currentUser = getCurrentUser();
+    const role = currentUser?.role ?? "agent";
+    const payload = buildPayload(record);
+
+    try {
+      const created = await createUser(payload, role);
+      const nextRecord = {
+        id: created.id,
+        name: created.fullName,
+        position: created.email,
+        assignedPhone: record.assignedPhone,
+        deviceModel: record.deviceModel,
+        deviceNumber: record.deviceNumber,
+        serialNumber: created.username,
+        serialNumber2: created.role,
+        entryDate: created.createdAt,
+        username: created.username,
+        password: created.passwordHash,
+        role: created.role === "admin" ? "Administrador" : created.role === "supervisor" ? "Supervisor" : "Agente",
+      } as UserRecord;
+
+      const nextRecords = [...records, nextRecord];
+      persistRecords(nextRecords);
+      setIsFormOpen(false);
+      setStatusMessage("Ficha creada correctamente");
+    } catch {
+      const fallbackRecord = {
+        id: `local-${Date.now()}`,
+        ...record,
+      } as UserRecord;
+      const nextRecords = [...records, fallbackRecord];
+      persistRecords(nextRecords);
+      setIsFormOpen(false);
+      setStatusMessage("Se guardó localmente porque el backend no respondió");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditRecord = async (record: Omit<UserRecord, "id">) => {
     if (!editingRecord) return;
-    setRecords((prev) =>
-      prev.map((r) => (r.id === editingRecord.id ? { ...record, id: r.id } : r))
-    );
-    setEditingRecord(null);
-    setIsFormOpen(false);
+    setIsSaving(true);
+    setStatusMessage(null);
+    const currentUser = getCurrentUser();
+    const role = currentUser?.role ?? "agent";
+    const payload = buildPayload(record);
+
+    try {
+      const updated = await updateUser(editingRecord.id, payload, role);
+      const nextRecords = records.map((r) => (r.id === editingRecord.id ? {
+        ...r,
+        name: updated.fullName,
+        position: updated.email,
+        username: updated.username,
+        password: updated.passwordHash,
+        role: updated.role === "admin" ? "Administrador" : updated.role === "supervisor" ? "Supervisor" : "Agente",
+      } : r));
+      persistRecords(nextRecords);
+      setEditingRecord(null);
+      setIsFormOpen(false);
+      setStatusMessage("Ficha actualizada correctamente");
+    } catch {
+      const nextRecords = records.map((r) => (r.id === editingRecord.id ? { ...r, ...record, id: r.id } : r));
+      persistRecords(nextRecords);
+      setEditingRecord(null);
+      setIsFormOpen(false);
+      setStatusMessage("Se actualizó localmente porque el backend no respondió");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDeleteRecord = (id: string) => {
-    if (confirm("¿Estás seguro de que deseas eliminar esta ficha?")) {
-      setRecords((prev) => prev.filter((r) => r.id !== id));
+  const handleDeleteRecord = async (id: string) => {
+    if (confirm("¿Estás seguro de que deseas actualizar el estado de esta ficha?")) {
+      setIsSaving(true);
+      setStatusMessage(null);
+      const currentUser = getCurrentUser();
+      const role = currentUser?.role ?? "agent";
+      try {
+        const updated = await updateUserStatus(id, "suspended", role);
+        const nextRecords = records.map((record) => record.id === id ? { ...record, role: updated.status === "suspended" ? "Suspendido" as UserRole : record.role } : record);
+        persistRecords(nextRecords);
+        setStatusMessage("Estado actualizado correctamente");
+      } catch {
+        const nextRecords = records.map((record) => record.id === id ? { ...record, role: "Suspendido" as UserRole } : record);
+        persistRecords(nextRecords);
+        setStatusMessage("Se marcó localmente como suspendida");
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -128,7 +217,8 @@ export function UserRecordManagement() {
           </div>
           <button
             onClick={openAddForm}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-500/25 transition-all hover:bg-blue-700 active:scale-[0.985]"
+            disabled={isSaving}
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-500/25 transition-all hover:bg-blue-700 active:scale-[0.985] disabled:cursor-not-allowed disabled:bg-slate-400"
           >
             <Plus size={18} strokeWidth={2.5} />
             Añadir Ficha
@@ -147,6 +237,12 @@ export function UserRecordManagement() {
           />
         </div>
       </div>
+
+      {statusMessage && (
+        <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-700">
+          {statusMessage}
+        </div>
+      )}
 
       {/* Records Grid */}
       <div className="grid gap-4 p-5 md:grid-cols-2 lg:grid-cols-3">

@@ -5,7 +5,7 @@ import * as Label from "@radix-ui/react-label";
 import { Eye, EyeOff, Check, Loader2, ShieldCheck, MessageSquare, LayoutDashboard } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import companyLogo from "../../imports/IMG_20260602_130639_278.jpg";
-import { mockLogin, homeRouteFor } from "../lib/auth";
+import { mockLogin, homeRouteFor, saveCurrentUser } from "../lib/auth";
 import type { AuthUser } from "../lib/auth";
 
 /* ─── Field errors ─── */
@@ -132,7 +132,8 @@ export function LoginCard() {
         return;
       }
 
-      /* Show role detection card for 2 seconds, then redirect */
+      /* Persist the current user session and show role detection card for 2 seconds. */
+      saveCurrentUser(result.user, rememberMe);
       setLoading(false);
       setDetectedUser(result.user);
       setTimeout(() => navigate(homeRouteFor(result.user.role)), 2000);

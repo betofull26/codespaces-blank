@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
 import { agentsData } from "../components/dashboard/agentsData";
 import JSZip from "jszip";
 import { UserRecordManagement } from "../components/dashboard/UserRecordManagement";
+import { getCurrentUser } from "../lib/auth";
 import {
   Download, MessageSquare, Users, HardDrive, CheckCircle2, Loader2,
   Clock, FileText, ShieldCheck, AlertCircle, SlidersHorizontal,
@@ -96,7 +98,7 @@ const roleConfig: Record<Role, { icon: React.ReactNode; color: string; bg: strin
     icon: <Shield size={13} />,
     color: "text-amber-700",
     bg: "bg-amber-100",
-    desc: "Accede solo a sus propias conversaciones y contactos asignados.",
+    desc: "",
   },
 };
 
@@ -171,30 +173,6 @@ function RoleBadge({ role }: { role: Role }) {
   );
 }
 
-/* Pending invitation row */
-interface Invitation { id: string; email: string; role: Role; sentAt: string }
-
-function InvitationRow({ inv, onRevoke }: { inv: Invitation; onRevoke: (id: string) => void }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-        <Mail size={14} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="truncate text-sm font-medium text-slate-800">{inv.email}</p>
-        <p className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-          <Clock size={10} /> Enviada: {inv.sentAt}
-        </p>
-      </div>
-      <RoleBadge role={inv.role} />
-      <button onClick={() => onRevoke(inv.id)}
-        className="ml-1 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500">
-        <X size={14} />
-      </button>
-    </div>
-  );
-}
-
 /* ══════════════════════════════════════════════════════
    TABS
 ══════════════════════════════════════════════════════ */
@@ -208,14 +186,32 @@ type Tab = (typeof TABS)[number]["id"];
    PAGE
 ══════════════════════════════════════════════════════ */
 export function SettingsPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("backup");
-
-  /* ── backup state ── */
-  const [chatsStatus,    setChatsStatus]    = useState<BackupStatus>("idle");
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [chatsStatus, setChatsStatus] = useState<BackupStatus>("idle");
   const [contactsStatus, setContactsStatus] = useState<BackupStatus>("idle");
-  const [fullStatus,     setFullStatus]     = useState<BackupStatus>("idle");
+  const [fullStatus, setFullStatus] = useState<BackupStatus>("idle");
   const [selectedAgentId, setSelectedAgentId] = useState<string>(agentsData[0]?.id ?? "");
   const [history, setHistory] = useState<BackupRecord[]>([]);
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      navigate("/", { replace: true });
+      return;
+    }
+
+    if (currentUser.role === "agent") {
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+
+    setIsAuthorized(true);
+  }, [navigate]);
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   const totalChats = agentsData.reduce((a, ag) => a + (ag.conversations?.length ?? 0), 0);
   const selectedAgent = agentsData.find((agent) => agent.id === selectedAgentId) ?? agentsData[0] ?? null;
@@ -288,38 +284,6 @@ export function SettingsPage() {
       a.click();
       URL.revokeObjectURL(a.href);
     }, () => addRecord({ label: "Respaldo completo (ZIP)", time: timestamp(), type: "full" }));
-
-  /* ── team state ── */
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [invEmail,    setInvEmail]    = useState("");
-  const [invRole,     setInvRole]     = useState<Role>("Agente");
-  const [invSending,  setInvSending]  = useState(false);
-  const [invSuccess,  setInvSuccess]  = useState(false);
-  const [invError,    setInvError]    = useState("");
-
-  const handleSendInvite = () => {
-    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!invEmail.trim()) { setInvError("Ingresa un correo electrónico."); return; }
-    if (!emailRx.test(invEmail)) { setInvError("El correo no tiene un formato válido."); return; }
-    if (invitations.some((i) => i.email === invEmail)) {
-      setInvError("Este correo ya tiene una invitación pendiente."); return;
-    }
-    setInvError("");
-    setInvSending(true);
-    setTimeout(() => {
-      setInvitations((prev) => [
-        ...prev,
-        { id: String(Date.now()), email: invEmail, role: invRole, sentAt: timestamp() },
-      ]);
-      setInvEmail("");
-      setInvSending(false);
-      setInvSuccess(true);
-      setTimeout(() => setInvSuccess(false), 3500);
-    }, 1400);
-  };
-
-  const handleRevokeInvite = (id: string) =>
-    setInvitations((prev) => prev.filter((i) => i.id !== id));
 
   const typeIcon = (t: BackupRecord["type"]) => ({
     chats:    <MessageSquare size={13} className="text-blue-500" />,
@@ -482,21 +446,6 @@ export function SettingsPage() {
             <div className="grid gap-6 lg:grid-cols-3">
               {/* ── Left col: members + invitations ── */}
               <div className="flex flex-col gap-5 lg:col-span-2">
-
-                {/* Invite form removed per request */}
-
-                {/* Pending invitations */}
-                {invitations.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <Clock size={14} className="text-amber-500" />
-                      Invitaciones pendientes ({invitations.length})
-                    </h4>
-                    {invitations.map((inv) => (
-                      <InvitationRow key={inv.id} inv={inv} onRevoke={handleRevokeInvite} />
-                    ))}
-                  </div>
-                )}
 
                 {/* Members list */}
                 {/* Gestión de Fichas (copiada desde UserManagementPage) */}

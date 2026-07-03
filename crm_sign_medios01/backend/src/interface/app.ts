@@ -5,6 +5,7 @@ import { buildErrorResponse } from '../common/apiResponse.js';
 import { healthRouter } from '../infrastructure/http/routes/healthRoute.js';
 import { databaseRouter } from '../infrastructure/http/routes/databaseRoute.js';
 import { bootstrapRouter } from '../infrastructure/http/routes/bootstrapRoute.js';
+import { userManagementRouter } from '../infrastructure/http/routes/userManagementRoute.js';
 
 export const createApp = () => {
   const app = express();
@@ -16,6 +17,7 @@ export const createApp = () => {
   app.use('/api', healthRouter);
   app.use('/api', databaseRouter);
   app.use('/api', bootstrapRouter);
+  app.use('/api', userManagementRouter);
 
   app.use((_req, res) => {
     res.status(404).json(buildErrorResponse('Ruta no encontrada', 'NOT_FOUND'));

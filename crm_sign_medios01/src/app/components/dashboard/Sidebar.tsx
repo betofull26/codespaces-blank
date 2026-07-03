@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Home, BookUser, Smartphone, FileText, LogOut, SlidersHorizontal } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
+import { AuthUser, getCurrentUser } from "../../lib/auth";
 import companyLogo from "../../../imports/IMG_20260602_130639_278.jpg";
 
 interface SidebarProps {
@@ -11,10 +13,20 @@ interface SidebarProps {
 
 export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
   const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
 
   const handleLogout = () => {
     navigate("/");
   };
+
+  if (currentUser?.role === "agent") {
+    navigate("/dashboard", { replace: true });
+    return null;
+  }
 
   return (
     <aside className="flex w-72 flex-col border-r border-slate-200 bg-white shadow-sm">

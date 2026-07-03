@@ -36,10 +36,34 @@ export interface CustomerModel {
 
 export interface UserModel {
   id: string;
+  fullName: string;
   email: string;
+  username: string;
   passwordHash: string;
-  name: string;
   role: 'admin' | 'agent' | 'supervisor';
+  status: 'active' | 'inactive' | 'suspended';
+  accessToPanel: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserCredentialsModel {
+  id: string;
+  userId: string;
+  username: string;
+  passwordHash: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditLogModel {
+  id: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  performedBy: string;
+  details: string;
+  createdAt: string;
 }
 
 const assertRequired = (value: unknown, fieldName: string) => {
@@ -88,8 +112,11 @@ export const validateCustomer = (customer: CustomerModel) => {
 
 export const validateUser = (user: UserModel) => {
   assertRequired(user.id, 'id');
+  assertRequired(user.fullName, 'fullName');
   assertRequired(user.email, 'email');
+  assertRequired(user.username, 'username');
   assertRequired(user.passwordHash, 'passwordHash');
-  assertRequired(user.name, 'name');
   assertRequired(user.role, 'role');
+  assertRequired(user.status, 'status');
+  assertRequired(user.accessToPanel, 'accessToPanel');
 };

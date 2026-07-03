@@ -1,4 +1,4 @@
-import type { AgentModel, ConversationModel, MessageModel } from './models.js';
+import type { AgentModel, ConversationModel, MessageModel, UserModel, UserCredentialsModel, AuditLogModel } from './models.js';
 
 export interface AgentRepository {
   list(): Promise<AgentModel[]>;
@@ -16,4 +16,18 @@ export interface ConversationRepository {
 export interface MessageRepository {
   listByConversationId(conversationId: string): Promise<MessageModel[]>;
   create(message: MessageModel): Promise<MessageModel>;
+}
+
+export interface UserRepository {
+  listUsers(): Promise<UserModel[]>;
+  getUserById(id: string): Promise<UserModel | null>;
+  getUserByEmail(email: string): Promise<UserModel | null>;
+  getUserByUsername(username: string): Promise<UserModel | null>;
+  getCredentialsByUsername(username: string): Promise<UserCredentialsModel | null>;
+  createUser(user: UserModel): Promise<UserModel>;
+  updateUser(user: UserModel): Promise<UserModel>;
+  updateUserRole(id: string, role: UserModel['role'], actorId: string): Promise<UserModel | null>;
+  updateUserStatus(id: string, status: UserModel['status']): Promise<UserModel | null>;
+  upsertCredentials(credentials: UserCredentialsModel): Promise<UserCredentialsModel>;
+  createAuditLog(entry: AuditLogModel): Promise<void>;
 }

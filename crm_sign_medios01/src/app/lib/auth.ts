@@ -107,3 +107,34 @@ export async function mockLogin(username: string, password: string): Promise<Log
 export function homeRouteFor(role: UserRole): string {
   return "/dashboard";
 }
+
+const STORAGE_KEY = "crm-signmedios-current-user";
+
+function parseStoredUser(value: string | null): AuthUser | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCurrentUser(user: AuthUser, rememberMe: boolean) {
+  const serialized = JSON.stringify(user);
+  if (rememberMe) {
+    localStorage.setItem(STORAGE_KEY, serialized);
+    sessionStorage.removeItem(STORAGE_KEY);
+  } else {
+    sessionStorage.setItem(STORAGE_KEY, serialized);
+    localStorage.removeItem(STORAGE_KEY);
+  }
+}
+
+export function getCurrentUser(): AuthUser | null {
+  return parseStoredUser(sessionStorage.getItem(STORAGE_KEY)) ?? parseStoredUser(localStorage.getItem(STORAGE_KEY));
+}
+
+export function clearCurrentUser() {
+  sessionStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(STORAGE_KEY);
+}

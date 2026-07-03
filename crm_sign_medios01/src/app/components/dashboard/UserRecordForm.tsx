@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Camera, Upload, X } from "lucide-react";
 import * as Label from "@radix-ui/react-label";
 import type { UserRecord, UserRole } from "./UserRecordManagement";
