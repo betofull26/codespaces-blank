@@ -47,7 +47,7 @@ export function UserRecordManagement() {
     serialNumber2: user.role,
     entryDate: user.createdAt,
     username: user.username,
-    password: user.passwordHash,
+    password: "",
     role: user.role === "admin" ? "Administrador" : user.role === "supervisor" ? "Supervisor" : "Agente",
   });
 
@@ -106,7 +106,7 @@ export function UserRecordManagement() {
         serialNumber2: created.role,
         entryDate: created.createdAt,
         username: created.username,
-        password: created.passwordHash,
+        password: record.password,
         role: created.role === "admin" ? "Administrador" : created.role === "supervisor" ? "Supervisor" : "Agente",
       } as UserRecord;
 
@@ -144,7 +144,7 @@ export function UserRecordManagement() {
         name: updated.fullName,
         position: updated.email,
         username: updated.username,
-        password: updated.passwordHash,
+        password: record.password,
         role: updated.role === "admin" ? "Administrador" : updated.role === "supervisor" ? "Supervisor" : "Agente",
       } : r));
       persistRecords(nextRecords);
@@ -285,10 +285,6 @@ export function UserRecordManagement() {
             {/* Details */}
             <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
               <div className="flex justify-between text-xs">
-                <span className="font-medium text-slate-600">Serial 2:</span>
-                <span className="font-mono font-semibold text-slate-900">{record.serialNumber2}</span>
-              </div>
-              <div className="flex justify-between text-xs">
                 <span className="font-medium text-slate-600">Teléfono:</span>
                 <span className="text-slate-800">{record.assignedPhone}</span>
               </div>
@@ -301,6 +297,10 @@ export function UserRecordManagement() {
                 <span className="font-mono font-semibold text-slate-900">
                   {record.serialNumber}
                 </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="font-medium text-slate-600">Serial 2:</span>
+                <span className="font-mono font-semibold text-slate-900">{record.serialNumber2}</span>
               </div>
             </div>
 
