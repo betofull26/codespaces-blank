@@ -14,7 +14,6 @@ export interface UserRecord {
   position: string;
   assignedPhone: string;
   deviceModel: string;
-  deviceNumber: string;
   serialNumber: string;
   serialNumber2: string;
   photo?: string;
@@ -44,7 +43,6 @@ export function UserRecordManagement() {
     position: user.email,
     assignedPhone: "",
     deviceModel: "",
-    deviceNumber: "",
     serialNumber: user.username,
     serialNumber2: user.role,
     entryDate: user.createdAt,
@@ -104,7 +102,6 @@ export function UserRecordManagement() {
         position: created.email,
         assignedPhone: record.assignedPhone,
         deviceModel: record.deviceModel,
-        deviceNumber: record.deviceNumber,
         serialNumber: created.username,
         serialNumber2: created.role,
         entryDate: created.createdAt,
@@ -116,16 +113,17 @@ export function UserRecordManagement() {
       const nextRecords = [...records, nextRecord];
       persistRecords(nextRecords);
       setIsFormOpen(false);
-      setStatusMessage("Ficha creada correctamente");
-    } catch {
-      const fallbackRecord = {
-        id: `local-${Date.now()}`,
-        ...record,
-      } as UserRecord;
-      const nextRecords = [...records, fallbackRecord];
-      persistRecords(nextRecords);
-      setIsFormOpen(false);
-      setStatusMessage("Se guardó localmente porque el backend no respondió");
+      setStatusMessage("✓ Ficha creada correctamente");
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Error desconocido";
+      console.error("Error al crear ficha:", errorMsg);
+      if (errorMsg.includes("Unauthorized")) {
+        setStatusMessage("❌ No tienes permisos para crear fichas. Solo administradores pueden hacerlo.");
+      } else if (errorMsg.includes("duplicate") || errorMsg.includes("already exists")) {
+        setStatusMessage("❌ El usuario o correo ya existe en el sistema.");
+      } else {
+        setStatusMessage(`❌ Error al crear ficha: ${errorMsg}`);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -152,20 +150,23 @@ export function UserRecordManagement() {
       persistRecords(nextRecords);
       setEditingRecord(null);
       setIsFormOpen(false);
-      setStatusMessage("Ficha actualizada correctamente");
-    } catch {
-      const nextRecords = records.map((r) => (r.id === editingRecord.id ? { ...r, ...record, id: r.id } : r));
-      persistRecords(nextRecords);
-      setEditingRecord(null);
-      setIsFormOpen(false);
-      setStatusMessage("Se actualizó localmente porque el backend no respondió");
+      setStatusMessage("✓ Ficha actualizada correctamente");
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Error desconocido";
+      console.error("Error al actualizar ficha:", errorMsg);
+      if (errorMsg.includes("Unauthorized")) {
+        setStatusMessage("❌ No tienes permisos para actualizar fichas.");
+      } else {
+        setStatusMessage(`❌ Error al actualizar: ${errorMsg}`);
+      }
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDeleteRecord = async (id: string) => {
-    if (confirm("¿Estás seguro de que deseas actualizar el estado de esta ficha?")) {
+    if (confirm("¿Estás seguro de que deseas suspender esta ficha?")) {
       setIsSaving(true);
       setStatusMessage(null);
       const currentUser = getCurrentUser();
@@ -174,11 +175,16 @@ export function UserRecordManagement() {
         const updated = await updateUserStatus(id, "suspended", role);
         const nextRecords = records.map((record) => record.id === id ? { ...record, role: updated.status === "suspended" ? "Suspendido" as UserRole : record.role } : record);
         persistRecords(nextRecords);
-        setStatusMessage("Estado actualizado correctamente");
-      } catch {
-        const nextRecords = records.map((record) => record.id === id ? { ...record, role: "Suspendido" as UserRole } : record);
-        persistRecords(nextRecords);
-        setStatusMessage("Se marcó localmente como suspendida");
+        setStatusMessage("✓ Ficha suspendida correctamente");
+        setTimeout(() => setStatusMessage(null), 3000);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "Error desconocido";
+        console.error("Error al suspender ficha:", errorMsg);
+        if (errorMsg.includes("Unauthorized")) {
+          setStatusMessage("❌ No tienes permisos para suspender fichas.");
+        } else {
+          setStatusMessage(`❌ Error al suspender: ${errorMsg}`);
+        }
       } finally {
         setIsSaving(false);
       }

@@ -1,5 +1,8 @@
 import { config } from '../../common/config.js';
 import { buildTableStatusRows, type DatabaseStatus } from '../../domain/database.js';
+import pkg from 'pg';
+
+const { Pool } = pkg;
 
 export interface DatabaseClient {
   query: (text: string, params?: unknown[]) => Promise<unknown[]>;
@@ -17,8 +20,20 @@ export const getDatabaseClient = async (): Promise<DatabaseClient> => {
     throw new Error('DATABASE_URL is not configured');
   }
 
-  const { Pool } = await import('pg');
-  const pool = new Pool({ connectionString: config.databaseUrl });
+  const pool = new Pool({ 
+    connectionString: config.databaseUrl,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+    max: 20,
+  });
+
+  // Test the connection before returning the client
+  try {
+    await pool.query('SELECT 1');
+  } catch (error) {
+    await pool.end();
+    throw error;
+  }
 
   client = {
     query: async (text: string, params?: unknown[]) => {

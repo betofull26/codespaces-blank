@@ -16,31 +16,60 @@ export const createUser = async (
   user: UserModel,
   actorId: string,
 ): Promise<UserModel> => {
-  const passwordHash = await bcrypt.hash(user.passwordHash, 10);
-  const created = await repository.createUser({ ...user, passwordHash });
-
-  if (created.accessToPanel) {
-    await repository.upsertCredentials({
-      id: `cred-${created.id}`,
-      userId: created.id,
-      username: created.username,
+  try {
+    // Generate ID and timestamps if not provided
+    const now = new Date().toISOString();
+    const userId = user.id || `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Hash password
+    const passwordHash = await bcrypt.hash(user.passwordHash, 10);
+    
+    // Create user with all required fields
+    const userToCreate: UserModel = {
+      ...user,
+      id: userId,
       passwordHash,
+      createdAt: user.createdAt || now,
+      updatedAt: user.updatedAt || now,
+    };
+    
+    console.log('[createUser] Creating user:', { id: userToCreate.id, email: userToCreate.email, username: userToCreate.username });
+    
+    const created = await repository.createUser(userToCreate);
+    console.log('[createUser] User created successfully');
+
+    // Upsert credentials if has panel access
+    if (created.accessToPanel) {
+      console.log('[createUser] Upserting credentials for user:', created.id);
+      await repository.upsertCredentials({
+        id: `cred-${created.id}`,
+        userId: created.id,
+        username: created.username,
+        passwordHash,
+        createdAt: created.createdAt,
+        updatedAt: created.updatedAt,
+      } as UserCredentialsModel);
+      console.log('[createUser] Credentials upserted successfully');
+    }
+
+    // Create audit log
+    console.log('[createUser] Creating audit log');
+    await repository.createAuditLog({
+      id: `audit-${created.id}`,
+      entityType: 'user',
+      entityId: created.id,
+      action: 'create_user',
+      performedBy: actorId,
+      details: JSON.stringify({ role: created.role, accessToPanel: created.accessToPanel }),
       createdAt: created.createdAt,
-      updatedAt: created.updatedAt,
-    } as UserCredentialsModel);
+    });
+    console.log('[createUser] Audit log created successfully');
+
+    return created;
+  } catch (error) {
+    console.error('[createUser] Error:', error instanceof Error ? error.message : 'Unknown error');
+    throw error;
   }
-
-  await repository.createAuditLog({
-    id: `audit-${created.id}`,
-    entityType: 'user',
-    entityId: created.id,
-    action: 'create_user',
-    performedBy: actorId,
-    details: JSON.stringify({ role: created.role, accessToPanel: created.accessToPanel }),
-    createdAt: created.createdAt,
-  });
-
-  return created;
 };
 
 export const changeUserRole = async (

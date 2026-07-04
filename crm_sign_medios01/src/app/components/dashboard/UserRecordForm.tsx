@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Camera, Upload, X } from "lucide-react";
+import { Camera, Upload, X, Eye, EyeOff } from "lucide-react";
 import * as Label from "@radix-ui/react-label";
 import type { UserRecord, UserRole } from "./UserRecordManagement";
 
@@ -24,7 +24,6 @@ export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFo
     position: initialData?.position || "",
     assignedPhone: initialData?.assignedPhone || "",
     deviceModel: initialData?.deviceModel || "",
-    deviceNumber: initialData?.deviceNumber || "",
     serialNumber: initialData?.serialNumber || "",
     serialNumber2: initialData?.serialNumber2 || "",
     photo: initialData?.photo || "",
@@ -35,15 +34,31 @@ export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFo
   });
 
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(initialData?.photo);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validaciones
+    const errors: string[] = [];
+    if (!formData.firstName.trim()) errors.push("El nombre es requerido");
+    if (!formData.lastName.trim()) errors.push("Los apellidos son requeridos");
+    if (!formData.position.trim()) errors.push("El cargo/email es requerido");
+    if (!formData.username.trim()) errors.push("El usuario es requerido");
+    if (!formData.password.trim()) errors.push("La contraseña es requerida");
+    if (!formData.entryDate) errors.push("La fecha de ingreso es requerida");
+    if (!formData.serialNumber.trim()) errors.push("El número de serie 1 es requerido");
+    
+    if (errors.length > 0) {
+      alert("Por favor completa los campos requeridos:\n" + errors.join("\n"));
+      return;
+    }
+    
     const payload = {
       name: `${formData.firstName} ${formData.lastName}`.trim(),
       position: formData.position,
       assignedPhone: formData.assignedPhone,
       deviceModel: formData.deviceModel,
-      deviceNumber: formData.deviceNumber,
       serialNumber: formData.serialNumber,
       serialNumber2: formData.serialNumber2,
       photo: formData.photo,
@@ -187,14 +202,24 @@ export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFo
 
         <div>
           <Label.Root htmlFor="password" className="text-sm font-semibold text-black">Contraseña</Label.Root>
-          <input
-            id="password"
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-            placeholder="••••••••"
-            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
-          />
+          <div className="relative mt-1.5">
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              value={formData.password}
+              onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+              placeholder="••••••••"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 pr-10 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+              title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </div>
 
         <div>

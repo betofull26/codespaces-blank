@@ -3,7 +3,7 @@
    In production, replace with real JWT endpoint calls.
 ══════════════════════════════════════════════════════ */
 
-export type UserRole = "admin" | "agent";
+export type UserRole = "admin" | "supervisor" | "agent";
 
 export interface AuthUser {
   id: string;
