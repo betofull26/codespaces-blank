@@ -11,6 +11,30 @@ export const getUserById = async (repository: UserRepository, userId: string): P
   return repository.getUserById(userId);
 };
 
+const isBcryptHash = (value: string | undefined): boolean => {
+  return typeof value === 'string' && value.startsWith('$2');
+};
+
+const hashPasswordIfNeeded = async (password: string): Promise<string> => {
+  if (isBcryptHash(password)) {
+    return password;
+  }
+
+  return bcrypt.hash(password, 10);
+};
+
+const passwordMatches = async (candidatePassword: string, storedPasswordHash: string | undefined): Promise<boolean> => {
+  if (!storedPasswordHash) {
+    return false;
+  }
+
+  if (isBcryptHash(storedPasswordHash)) {
+    return bcrypt.compare(candidatePassword, storedPasswordHash);
+  }
+
+  return storedPasswordHash === candidatePassword;
+};
+
 export const createUser = async (
   repository: UserRepository,
   user: UserModel,
@@ -19,7 +43,7 @@ export const createUser = async (
   const now = new Date().toISOString();
   const userId = user.id || `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  const passwordHash = await bcrypt.hash(user.passwordHash, 10);
+  const passwordHash = await hashPasswordIfNeeded(user.passwordHash);
 
   const userToCreate: UserModel = {
     ...user,
@@ -96,8 +120,11 @@ export const updateUser = async (
     throw new Error('User not found');
   }
 
+  const passwordHash = await hashPasswordIfNeeded(user.passwordHash);
+
   const userToUpdate: UserModel = {
     ...user,
+    passwordHash,
     updatedAt: new Date().toISOString(),
   };
 
@@ -109,7 +136,7 @@ export const updateUser = async (
     entityId: updated.id,
     action: 'update_user',
     performedBy: actorId,
-    details: JSON.stringify({ previousEmail: current.email, newEmail: updated.email }),
+    details: JSON.stringify({ previousUsername: current.username, newUsername: updated.username }),
     createdAt: updated.updatedAt,
   });
 
@@ -188,11 +215,33 @@ export const loginUser = async (
   }
 
   const credentials = await repository.getCredentialsByUsername(username);
-  const passwordMatches = credentials
-    ? await bcrypt.compare(password, credentials.passwordHash)
-    : await bcrypt.compare(password, user.passwordHash);
-  if (!passwordMatches) {
+  const matches = await Promise.all([
+    passwordMatches(password, user.passwordHash),
+    passwordMatches(password, credentials?.passwordHash),
+  ]);
+
+  if (!matches.some(Boolean)) {
     throw new Error('Unauthorized');
+  }
+
+  const nextHashedPassword = await hashPasswordIfNeeded(password);
+  const needsPasswordMigration = !isBcryptHash(user.passwordHash) || (credentials?.passwordHash ? !isBcryptHash(credentials.passwordHash) : false);
+
+  if (needsPasswordMigration) {
+    await repository.updateUser({
+      ...user,
+      passwordHash: nextHashedPassword,
+      updatedAt: new Date().toISOString(),
+    });
+
+    await repository.upsertCredentials({
+      id: credentials?.id ?? `cred-${user.id}`,
+      userId: user.id,
+      username: user.username,
+      passwordHash: nextHashedPassword,
+      createdAt: credentials?.createdAt ?? user.createdAt,
+      updatedAt: new Date().toISOString(),
+    } as UserCredentialsModel);
   }
 
   const auditEntry = createAuditEntry('credential', user.id, 'login', actorId, { username });

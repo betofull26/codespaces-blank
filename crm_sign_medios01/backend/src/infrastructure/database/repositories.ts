@@ -74,25 +74,19 @@ export class PostgresMessageRepository implements MessageRepository {
 export class PostgresUserRepository implements UserRepository {
   async listUsers(): Promise<UserModel[]> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, full_name AS "fullName", email, username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM users ORDER BY created_at');
+    const rows = await db.query('SELECT id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM users ORDER BY created_at');
     return rows as UserModel[];
   }
 
   async getUserById(id: string): Promise<UserModel | null> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, full_name AS "fullName", email, username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM users WHERE id = $1', [id]);
-    return (rows[0] as UserModel | undefined) ?? null;
-  }
-
-  async getUserByEmail(email: string): Promise<UserModel | null> {
-    const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, full_name AS "fullName", email, username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM users WHERE email = $1', [email]);
+    const rows = await db.query('SELECT id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM users WHERE id = $1', [id]);
     return (rows[0] as UserModel | undefined) ?? null;
   }
 
   async getUserByUsername(username: string): Promise<UserModel | null> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, full_name AS "fullName", email, username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM users WHERE username = $1', [username]);
+    const rows = await db.query('SELECT id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM users WHERE username = $1', [username]);
     return (rows[0] as UserModel | undefined) ?? null;
   }
 
@@ -105,8 +99,8 @@ export class PostgresUserRepository implements UserRepository {
   async createUser(user: UserModel): Promise<UserModel> {
     const db = await getDatabaseClient();
     await db.query(
-      'INSERT INTO users (id, full_name, email, username, password_hash, role, status, access_to_panel, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
-      [user.id, user.fullName, user.email, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
+      'INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+      [user.id, user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
     );
     return user;
   }
@@ -114,8 +108,8 @@ export class PostgresUserRepository implements UserRepository {
   async updateUser(user: UserModel): Promise<UserModel> {
     const db = await getDatabaseClient();
     await db.query(
-      'UPDATE users SET full_name = $1, email = $2, username = $3, password_hash = $4, role = $5, status = $6, access_to_panel = $7, updated_at = $8 WHERE id = $9',
-      [user.fullName, user.email, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.updatedAt, user.id],
+      'UPDATE users SET full_name = $1, username = $2, password_hash = $3, role = $4, status = $5, access_to_panel = $6, updated_at = $7 WHERE id = $8',
+      [user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.updatedAt, user.id],
     );
     return user;
   }
@@ -124,14 +118,14 @@ export class PostgresUserRepository implements UserRepository {
     const db = await getDatabaseClient();
     const accessToPanel = role !== 'agent';
     const updatedAt = new Date().toISOString();
-    const rows = await db.query('UPDATE users SET role = $1, access_to_panel = $2, updated_at = $3 WHERE id = $4 RETURNING id, full_name AS "fullName", email, username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [role, accessToPanel, updatedAt, id]);
+    const rows = await db.query('UPDATE users SET role = $1, access_to_panel = $2, updated_at = $3 WHERE id = $4 RETURNING id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [role, accessToPanel, updatedAt, id]);
     return (rows[0] as UserModel | undefined) ?? null;
   }
 
   async updateUserStatus(id: string, status: UserModel['status']): Promise<UserModel | null> {
     const db = await getDatabaseClient();
     const updatedAt = new Date().toISOString();
-    const rows = await db.query('UPDATE users SET status = $1, updated_at = $2 WHERE id = $3 RETURNING id, full_name AS "fullName", email, username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [status, updatedAt, id]);
+    const rows = await db.query('UPDATE users SET status = $1, updated_at = $2 WHERE id = $3 RETURNING id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [status, updatedAt, id]);
     return (rows[0] as UserModel | undefined) ?? null;
   }
 

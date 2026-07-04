@@ -31,13 +31,11 @@ export interface CustomerModel {
   id: string;
   name: string;
   phone?: string | null;
-  email?: string | null;
 }
 
 export interface UserModel {
   id: string;
   fullName: string;
-  email: string;
   username: string;
   passwordHash: string;
   role: 'admin' | 'agent' | 'supervisor';
@@ -113,7 +111,6 @@ export const validateCustomer = (customer: CustomerModel) => {
 export const validateUser = (user: UserModel) => {
   assertRequired(user.id, 'id');
   assertRequired(user.fullName, 'fullName');
-  assertRequired(user.email, 'email');
   assertRequired(user.username, 'username');
   assertRequired(user.passwordHash, 'passwordHash');
   assertRequired(user.role, 'role');

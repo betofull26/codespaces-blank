@@ -1,3 +1,16 @@
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'users'
+      AND column_name = 'email'
+  ) THEN
+    ALTER TABLE users DROP COLUMN IF EXISTS email;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS agents (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -38,7 +51,6 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   full_name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL,
@@ -73,7 +85,6 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE INDEX IF NOT EXISTS idx_conversations_agent_id ON conversations(agent_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
 INSERT INTO agents (id, name, role, phone, avatar, initials, online)
@@ -94,9 +105,9 @@ VALUES
   ('msg-2', 'conv-1', 'agent', 'Claro, te comparto los detalles.', '2026-07-02T09:20:00.000Z', 'dashboard', NULL)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO users (id, full_name, email, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at)
 VALUES
-  ('user-admin-1', 'Administrador', 'admin@example.com', 'admin', 'secret', 'admin', 'active', TRUE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z')
+  ('user-admin-1', 'Administrador', 'admin', 'secret', 'admin', 'active', TRUE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO user_credentials (id, user_id, username, password_hash, created_at, updated_at)

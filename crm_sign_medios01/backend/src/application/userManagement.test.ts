@@ -11,11 +11,11 @@ test('createUser creates panel credentials when accessToPanel is true', async ()
   const repository: UserRepository = {
     listUsers: async () => [],
     getUserById: async () => null,
-    getUserByEmail: async () => null,
     getUserByUsername: async () => null,
     getCredentialsByUsername: async () => null,
     createUser: async (user) => user,
     updateUser: async (user) => user,
+    deleteUser: async () => undefined,
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
     upsertCredentials: async (entry: UserCredentialsModel) => {
@@ -28,7 +28,6 @@ test('createUser creates panel credentials when accessToPanel is true', async ()
   const result = await createUser(repository, {
     id: 'user-1',
     fullName: 'Ana Silva',
-    email: 'ana@example.com',
     username: 'ana.silva',
     passwordHash: 'hash-1',
     role: 'supervisor',
@@ -46,13 +45,50 @@ test('createUser creates panel credentials when accessToPanel is true', async ()
   assert.equal(storedCredential.username, 'ana.silva');
 });
 
+test('loginUser accepts legacy plain-text passwords for stored users', async () => {
+  const repository: UserRepository = {
+    listUsers: async () => [],
+    getUserById: async () => null,
+    getUserByUsername: async () => ({
+      id: 'user-legacy',
+      fullName: 'Usuario Legacy',
+      username: 'legacyuser',
+      passwordHash: 'plain-password',
+      role: 'admin',
+      status: 'active',
+      accessToPanel: true,
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    } as UserModel),
+    getCredentialsByUsername: async () => ({
+      id: 'cred-legacy',
+      userId: 'user-legacy',
+      username: 'legacyuser',
+      passwordHash: 'plain-password',
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    } as UserCredentialsModel),
+    createUser: async (user) => user,
+    updateUser: async (user) => user,
+    deleteUser: async () => undefined,
+    updateUserRole: async (_id, _role, _actorId) => null,
+    updateUserStatus: async (_id, _status) => null,
+    upsertCredentials: async (entry) => entry,
+    createAuditLog: async () => undefined,
+  };
+
+  const authenticated = await loginUser(repository, 'legacyuser', 'plain-password', 'admin');
+
+  assert.equal(authenticated.user.username, 'legacyuser');
+  assert.ok(authenticated.sessionToken.length > 0);
+});
+
 test('changeUserRole revokes panel access when role becomes agent', async () => {
   const repository: UserRepository = {
     listUsers: async () => [],
     getUserById: async () => ({
       id: 'user-2',
       fullName: 'Luis Pérez',
-      email: 'luis@example.com',
       username: 'luis.perez',
       passwordHash: 'hash-2',
       role: 'supervisor',
@@ -61,15 +97,14 @@ test('changeUserRole revokes panel access when role becomes agent', async () => 
       createdAt: '2026-07-03T00:00:00.000Z',
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel),
-    getUserByEmail: async () => null,
     getUserByUsername: async () => null,
     getCredentialsByUsername: async () => null,
     createUser: async (user) => user,
     updateUser: async (user) => user,
+    deleteUser: async () => undefined,
     updateUserRole: async (id, role, actorId) => ({
       id,
       fullName: 'Luis Pérez',
-      email: 'luis@example.com',
       username: 'luis.perez',
       passwordHash: 'hash-2',
       role,
@@ -95,7 +130,6 @@ test('listUsers returns the repository users', async () => {
     listUsers: async () => [{
       id: 'user-4',
       fullName: 'Nora Vega',
-      email: 'nora@example.com',
       username: 'nora.vega',
       passwordHash: 'hash-4',
       role: 'supervisor',
@@ -105,11 +139,11 @@ test('listUsers returns the repository users', async () => {
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel],
     getUserById: async () => null,
-    getUserByEmail: async () => null,
     getUserByUsername: async () => null,
     getCredentialsByUsername: async () => null,
     createUser: async (user) => user,
     updateUser: async (user) => user,
+    deleteUser: async () => undefined,
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
     upsertCredentials: async (entry) => entry,
@@ -128,7 +162,6 @@ test('getUserById returns the requested user', async () => {
     getUserById: async () => ({
       id: 'user-6',
       fullName: 'Sara López',
-      email: 'sara@example.com',
       username: 'sara.lopez',
       passwordHash: 'hash-6',
       role: 'supervisor',
@@ -137,11 +170,11 @@ test('getUserById returns the requested user', async () => {
       createdAt: '2026-07-03T00:00:00.000Z',
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel),
-    getUserByEmail: async () => null,
     getUserByUsername: async () => null,
     getCredentialsByUsername: async () => null,
     createUser: async (user) => user,
     updateUser: async (user) => user,
+    deleteUser: async () => undefined,
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
     upsertCredentials: async (entry) => entry,
@@ -159,7 +192,6 @@ test('updateUser edits the stored user data', async () => {
     getUserById: async () => ({
       id: 'user-7',
       fullName: 'Tomás Ruiz',
-      email: 'tomas@example.com',
       username: 'tomas.ruiz',
       passwordHash: 'hash-7',
       role: 'agent',
@@ -168,11 +200,11 @@ test('updateUser edits the stored user data', async () => {
       createdAt: '2026-07-03T00:00:00.000Z',
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel),
-    getUserByEmail: async () => null,
     getUserByUsername: async () => null,
     getCredentialsByUsername: async () => null,
     createUser: async (user) => user,
     updateUser: async (user) => user,
+    deleteUser: async () => undefined,
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
     upsertCredentials: async (entry) => entry,
@@ -182,8 +214,7 @@ test('updateUser edits the stored user data', async () => {
   const updated = await updateUser(repository, {
     id: 'user-7',
     fullName: 'Tomás Ruiz',
-    email: 'tomas.updated@example.com',
-    username: 'tomas.ruiz',
+    username: 'tomas.ruiz.updated',
     passwordHash: 'hash-7',
     role: 'agent',
     status: 'active',
@@ -192,7 +223,7 @@ test('updateUser edits the stored user data', async () => {
     updatedAt: '2026-07-03T00:00:00.000Z',
   } as UserModel, 'admin');
 
-  assert.equal(updated.email, 'tomas.updated@example.com');
+  assert.equal(updated.username, 'tomas.ruiz.updated');
 });
 
 test('changeUserStatus updates the account status and emits an audit event', async () => {
@@ -203,7 +234,6 @@ test('changeUserStatus updates the account status and emits an audit event', asy
     getUserById: async () => ({
       id: 'user-5',
       fullName: 'Pablo Ruiz',
-      email: 'pablo@example.com',
       username: 'pablo.ruiz',
       passwordHash: 'hash-5',
       role: 'agent',
@@ -212,16 +242,15 @@ test('changeUserStatus updates the account status and emits an audit event', asy
       createdAt: '2026-07-03T00:00:00.000Z',
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel),
-    getUserByEmail: async () => null,
     getUserByUsername: async () => null,
     getCredentialsByUsername: async () => null,
     createUser: async (user) => user,
     updateUser: async (user) => user,
+    deleteUser: async () => undefined,
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => ({
       id: 'user-5',
       fullName: 'Pablo Ruiz',
-      email: 'pablo@example.com',
       username: 'pablo.ruiz',
       passwordHash: 'hash-5',
       role: 'agent',
@@ -247,11 +276,9 @@ test('loginUser authenticates only active users with panel access', async () => 
   const repository: UserRepository = {
     listUsers: async () => [],
     getUserById: async () => null,
-    getUserByEmail: async () => null,
     getUserByUsername: async () => ({
       id: 'user-3',
       fullName: 'Marta Díaz',
-      email: 'marta@example.com',
       username: 'marta.diaz',
       passwordHash: 'hash-3',
       role: 'admin',
@@ -270,6 +297,7 @@ test('loginUser authenticates only active users with panel access', async () => 
     } as UserCredentialsModel),
     createUser: async (user) => user,
     updateUser: async (user) => user,
+    deleteUser: async () => undefined,
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
     upsertCredentials: async (entry) => entry,

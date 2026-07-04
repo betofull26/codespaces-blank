@@ -21,7 +21,6 @@ export interface MessageRepository {
 export interface UserRepository {
   listUsers(): Promise<UserModel[]>;
   getUserById(id: string): Promise<UserModel | null>;
-  getUserByEmail(email: string): Promise<UserModel | null>;
   getUserByUsername(username: string): Promise<UserModel | null>;
   getCredentialsByUsername(username: string): Promise<UserCredentialsModel | null>;
   createUser(user: UserModel): Promise<UserModel>;

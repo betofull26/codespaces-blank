@@ -37,26 +37,77 @@ export function UserRecordManagement() {
     localStorage.setItem(USER_RECORDS_STORAGE_KEY, JSON.stringify(nextRecords));
   };
 
-  const mapBackendUserToRecord = (user: BackendUser): UserRecord => ({
+  const showStatusMessage = (message: string | null, timeoutMs?: number) => {
+    setStatusMessage(message);
+
+    if (timeoutMs) {
+      window.setTimeout(() => {
+        setStatusMessage((currentMessage) => (currentMessage === message ? null : currentMessage));
+      }, timeoutMs);
+    }
+  };
+
+  const mapBackendRoleToRecordRole = (role: BackendUser["role"]): UserRole => {
+    switch (role) {
+      case "admin":
+        return "Administrador";
+      case "supervisor":
+        return "Supervisor";
+      default:
+        return "Agente";
+    }
+  };
+
+  const mapRecordRoleToBackendRole = (role: UserRole): BackendUser["role"] => {
+    switch (role) {
+      case "Administrador":
+        return "admin";
+      case "Supervisor":
+        return "supervisor";
+      default:
+        return "agent";
+    }
+  };
+
+  const mapBackendUserToRecord = (user: BackendUser, fallback?: UserRecord): UserRecord => ({
     id: user.id,
     name: user.fullName,
-    position: user.email,
-    assignedPhone: "",
-    deviceModel: "",
-    serialNumber: user.username,
-    serialNumber2: user.role,
-    entryDate: user.createdAt,
+    position: fallback?.position ?? "",
+    assignedPhone: fallback?.assignedPhone ?? "",
+    deviceModel: fallback?.deviceModel ?? "",
+    serialNumber: fallback?.serialNumber ?? "",
+    serialNumber2: fallback?.serialNumber2 ?? "",
+    photo: fallback?.photo ?? "",
+    entryDate: fallback?.entryDate ?? user.createdAt,
     username: user.username,
-    password: "",
-    role: user.role === "admin" ? "Administrador" : user.role === "supervisor" ? "Supervisor" : "Agente",
+    password: fallback?.password ?? "",
+    role: mapBackendRoleToRecordRole(user.role),
   });
+
+  const mergeRecordsWithBackendUsers = (storedRecords: UserRecord[], backendUsers: BackendUser[]) => {
+    const byId = new Map(storedRecords.map((record) => [record.id, record]));
+    const byUsername = new Map(storedRecords.map((record) => [record.username.toLowerCase(), record]));
+
+    const mergedRecords = backendUsers.map((user) => {
+      const fallback = byId.get(user.id) ?? byUsername.get(user.username.toLowerCase());
+      return mapBackendUserToRecord(user, fallback);
+    });
+
+    const missingRecords = storedRecords.filter((record) => {
+      const existsInBackend = backendUsers.some(
+        (user) => user.id === record.id || user.username.toLowerCase() === record.username.toLowerCase(),
+      );
+      return !existsInBackend;
+    });
+
+    return [...mergedRecords, ...missingRecords];
+  };
 
   const buildPayload = (record: Omit<UserRecord, "id">) => ({
     fullName: record.name,
-    email: record.position,
     username: record.username,
     passwordHash: record.password,
-    role: record.role === "Administrador" ? "admin" : record.role === "Supervisor" ? "supervisor" : "agent",
+    role: mapRecordRoleToBackendRole(record.role),
     status: "active" as const,
     accessToPanel: record.role !== "Agente",
   });
@@ -65,11 +116,12 @@ export function UserRecordManagement() {
     const currentUser = getCurrentUser();
     const role = currentUser?.role ?? "agent";
     const storedRecords = localStorage.getItem(USER_RECORDS_STORAGE_KEY);
+    let parsedStoredRecords: UserRecord[] = [];
 
     if (storedRecords) {
       try {
-        const parsed = JSON.parse(storedRecords) as UserRecord[];
-        setRecords(parsed);
+        parsedStoredRecords = JSON.parse(storedRecords) as UserRecord[];
+        setRecords(parsedStoredRecords);
       } catch {
         localStorage.removeItem(USER_RECORDS_STORAGE_KEY);
       }
@@ -77,8 +129,8 @@ export function UserRecordManagement() {
 
     fetchUsers(role)
       .then((users) => {
-        const mapped = users.map(mapBackendUserToRecord);
-        persistRecords(mapped);
+        const mergedRecords = mergeRecordsWithBackendUsers(parsedStoredRecords, users);
+        persistRecords(mergedRecords);
       })
       .catch(() => {
         if (!storedRecords) {
@@ -96,31 +148,32 @@ export function UserRecordManagement() {
 
     try {
       const created = await createUser(payload, role);
-      const nextRecord = {
+      const nextRecord: UserRecord = {
         id: created.id,
         name: created.fullName,
-        position: created.email,
+        position: record.position,
         assignedPhone: record.assignedPhone,
         deviceModel: record.deviceModel,
-        serialNumber: created.username,
-        serialNumber2: created.role,
-        entryDate: created.createdAt,
+        serialNumber: record.serialNumber,
+        serialNumber2: record.serialNumber2,
+        photo: record.photo,
+        entryDate: record.entryDate,
         username: created.username,
         password: record.password,
-        role: created.role === "admin" ? "Administrador" : created.role === "supervisor" ? "Supervisor" : "Agente",
-      } as UserRecord;
+        role: mapBackendRoleToRecordRole(created.role),
+      };
 
       const nextRecords = [...records, nextRecord];
       persistRecords(nextRecords);
       setIsFormOpen(false);
-      setStatusMessage("✓ Ficha creada correctamente");
+      showStatusMessage(`✓ Ficha creada correctamente. El usuario "${created.username}" ya puede iniciar sesión con la contraseña registrada.`, 5000);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Error desconocido";
       console.error("Error al crear ficha:", errorMsg);
       if (errorMsg.includes("Unauthorized")) {
         setStatusMessage("❌ No tienes permisos para crear fichas. Solo administradores pueden hacerlo.");
       } else if (errorMsg.includes("duplicate") || errorMsg.includes("already exists")) {
-        setStatusMessage("❌ El usuario o correo ya existe en el sistema.");
+        setStatusMessage("❌ El usuario ya existe en el sistema.");
       } else {
         setStatusMessage(`❌ Error al crear ficha: ${errorMsg}`);
       }
@@ -141,17 +194,17 @@ export function UserRecordManagement() {
       const updated = await updateUser(editingRecord.id, payload, role);
       const nextRecords = records.map((r) => (r.id === editingRecord.id ? {
         ...r,
+        ...record,
+        id: editingRecord.id,
         name: updated.fullName,
-        position: updated.email,
         username: updated.username,
         password: record.password,
-        role: updated.role === "admin" ? "Administrador" : updated.role === "supervisor" ? "Supervisor" : "Agente",
+        role: mapBackendRoleToRecordRole(updated.role),
       } : r));
       persistRecords(nextRecords);
       setEditingRecord(null);
       setIsFormOpen(false);
-      setStatusMessage("✓ Ficha actualizada correctamente");
-      setTimeout(() => setStatusMessage(null), 3000);
+      showStatusMessage("✓ Ficha actualizada correctamente", 3000);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Error desconocido";
       console.error("Error al actualizar ficha:", errorMsg);
@@ -175,8 +228,7 @@ export function UserRecordManagement() {
         await deleteUserById(id, role);
         const nextRecords = records.filter((record) => record.id !== id);
         persistRecords(nextRecords);
-        setStatusMessage("✓ Ficha eliminada correctamente");
-        setTimeout(() => setStatusMessage(null), 3000);
+        showStatusMessage("✓ Ficha eliminada correctamente", 3000);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Error desconocido";
         console.error("Error al eliminar ficha:", errorMsg);
@@ -199,6 +251,16 @@ export function UserRecordManagement() {
   const openEditForm = (record: UserRecord) => {
     setEditingRecord(record);
     setIsFormOpen(true);
+  };
+
+  const formatEntryDate = (value: string) => {
+    if (!value) return "Sin fecha";
+
+    const [year, month, day] = value.split("-").map((part) => Number(part));
+    if (!year || !month || !day) return value;
+
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
   };
 
   const filteredRecords = records.filter(
@@ -277,7 +339,7 @@ export function UserRecordManagement() {
                 </div>
                 <p className="truncate text-xs text-slate-600">{record.position}</p>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Ingreso: {new Date(record.entryDate).toLocaleDateString("es-MX")}
+                  Ingreso: {formatEntryDate(record.entryDate)}
                 </p>
               </div>
             </div>

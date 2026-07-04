@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Camera, Upload, X, Eye, EyeOff } from "lucide-react";
 import * as Label from "@radix-ui/react-label";
 import type { UserRecord, UserRole } from "./UserRecordManagement";
@@ -35,6 +35,26 @@ export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFo
 
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(initialData?.photo);
   const [showPassword, setShowPassword] = useState(false);
+  const requiresCredentials = formData.role !== "Agente";
+
+  const validatePassword = (value: string) => {
+    if (value.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
+    if (value.length > 16) return "La contraseña no puede tener más de 16 caracteres.";
+    return null;
+  };
+
+  const validateEntryDate = (value: string) => {
+    if (!value) return "La fecha de ingreso es requerida.";
+
+    const today = new Date();
+    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    if (value > todayString) {
+      return "La fecha de ingreso no puede ser superior a la fecha actual.";
+    }
+
+    return null;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,11 +63,18 @@ export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFo
     const errors: string[] = [];
     if (!formData.firstName.trim()) errors.push("El nombre es requerido");
     if (!formData.lastName.trim()) errors.push("Los apellidos son requeridos");
-    if (!formData.position.trim()) errors.push("El cargo/email es requerido");
-    if (!formData.username.trim()) errors.push("El usuario es requerido");
-    if (!formData.password.trim()) errors.push("La contraseña es requerida");
-    if (!formData.entryDate) errors.push("La fecha de ingreso es requerida");
-    if (!formData.serialNumber.trim()) errors.push("El número de serie 1 es requerido");
+    if (!formData.position.trim()) errors.push("El cargo es requerido");
+    if (requiresCredentials) {
+      if (!formData.username.trim()) errors.push("El usuario es requerido");
+      if (!formData.password.trim()) {
+        errors.push("La contraseña es requerida");
+      } else {
+        const passwordError = validatePassword(formData.password);
+        if (passwordError) errors.push(passwordError);
+      }
+    }
+    const entryDateError = validateEntryDate(formData.entryDate);
+    if (entryDateError) errors.push(entryDateError);
     
     if (errors.length > 0) {
       alert("Por favor completa los campos requeridos:\n" + errors.join("\n"));
@@ -189,38 +216,57 @@ export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFo
         </div>
 
         <div>
-          <Label.Root htmlFor="username" className="text-sm font-semibold text-black">Usuario</Label.Root>
-          <input
-            id="username"
-            type="text"
-            value={formData.username}
-            onChange={(e) => setFormData((prev) => ({ ...prev, username: e.target.value }))}
-            placeholder="usuario01"
-            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
-          />
+          <Label.Root htmlFor="role" className="text-sm font-semibold text-black">Rol</Label.Root>
+          <select
+            id="role"
+            value={formData.role}
+            onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
+          >
+            <option value="Administrador">Administrador</option>
+            <option value="Supervisor">Supervisor</option>
+            <option value="Agente">Agente</option>
+            <option value="Suspendido">Suspendido</option>
+          </select>
         </div>
 
-        <div>
-          <Label.Root htmlFor="password" className="text-sm font-semibold text-black">Contraseña</Label.Root>
-          <div className="relative mt-1.5">
-            <input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              value={formData.password}
-              onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-              placeholder="••••••••"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 pr-10 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
-              title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-        </div>
+        {requiresCredentials && (
+          <>
+            <div>
+              <Label.Root htmlFor="username" className="text-sm font-semibold text-black">Usuario</Label.Root>
+              <input
+                id="username"
+                type="text"
+                value={formData.username}
+                onChange={(e) => setFormData((prev) => ({ ...prev, username: e.target.value }))}
+                placeholder="usuario01"
+                className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
+              />
+            </div>
+
+            <div>
+              <Label.Root htmlFor="password" className="text-sm font-semibold text-black">Contraseña</Label.Root>
+              <div className="relative mt-1.5">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                  placeholder="••••••••"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 pr-10 text-sm text-black placeholder:text-gray-400 outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                  title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
 
         <div>
           <Label.Root htmlFor="serialNumber" className="text-sm font-semibold text-black">Número de Serie 1</Label.Root>
@@ -246,20 +292,6 @@ export function UserRecordForm({ initialData, onSubmit, onCancel }: UserRecordFo
           />
         </div>
 
-        <div>
-          <Label.Root htmlFor="role" className="text-sm font-semibold text-black">Rol</Label.Root>
-          <select
-            id="role"
-            value={formData.role}
-            onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
-            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-black outline-none transition-all duration-150 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15"
-          >
-            <option value="Administrador">Administrador</option>
-            <option value="Supervisor">Supervisor</option>
-            <option value="Agente">Agente</option>
-            <option value="Suspendido">Suspendido</option>
-          </select>
-        </div>
       </div>
 
       <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-4">

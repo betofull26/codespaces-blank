@@ -11,7 +11,6 @@ interface ApiEnvelope<T> {
 export interface BackendUser {
   id: string;
   fullName: string;
-  email: string;
   username: string;
   passwordHash: string;
   role: "admin" | "supervisor" | "agent";
@@ -23,7 +22,6 @@ export interface BackendUser {
 
 export interface UserCreatePayload {
   fullName: string;
-  email: string;
   username: string;
   passwordHash: string;
   role: BackendUser["role"];
