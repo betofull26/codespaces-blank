@@ -16,60 +16,33 @@ export const createUser = async (
   user: UserModel,
   actorId: string,
 ): Promise<UserModel> => {
-  try {
-    // Generate ID and timestamps if not provided
-    const now = new Date().toISOString();
-    const userId = user.id || `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Hash password
-    const passwordHash = await bcrypt.hash(user.passwordHash, 10);
-    
-    // Create user with all required fields
-    const userToCreate: UserModel = {
-      ...user,
-      id: userId,
+  const now = new Date().toISOString();
+  const userId = user.id || `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  const passwordHash = await bcrypt.hash(user.passwordHash, 10);
+
+  const userToCreate: UserModel = {
+    ...user,
+    id: userId,
+    passwordHash,
+    createdAt: user.createdAt || now,
+    updatedAt: user.updatedAt || now,
+  };
+
+  const created = await repository.createUser(userToCreate);
+
+  if (created.accessToPanel) {
+    await repository.upsertCredentials({
+      id: `cred-${created.id}`,
+      userId: created.id,
+      username: created.username,
       passwordHash,
-      createdAt: user.createdAt || now,
-      updatedAt: user.updatedAt || now,
-    };
-    
-    console.log('[createUser] Creating user:', { id: userToCreate.id, email: userToCreate.email, username: userToCreate.username });
-    
-    const created = await repository.createUser(userToCreate);
-    console.log('[createUser] User created successfully');
-
-    // Upsert credentials if has panel access
-    if (created.accessToPanel) {
-      console.log('[createUser] Upserting credentials for user:', created.id);
-      await repository.upsertCredentials({
-        id: `cred-${created.id}`,
-        userId: created.id,
-        username: created.username,
-        passwordHash,
-        createdAt: created.createdAt,
-        updatedAt: created.updatedAt,
-      } as UserCredentialsModel);
-      console.log('[createUser] Credentials upserted successfully');
-    }
-
-    // Create audit log
-    console.log('[createUser] Creating audit log');
-    await repository.createAuditLog({
-      id: `audit-${created.id}`,
-      entityType: 'user',
-      entityId: created.id,
-      action: 'create_user',
-      performedBy: actorId,
-      details: JSON.stringify({ role: created.role, accessToPanel: created.accessToPanel }),
       createdAt: created.createdAt,
-    });
-    console.log('[createUser] Audit log created successfully');
-
-    return created;
-  } catch (error) {
-    console.error('[createUser] Error:', error instanceof Error ? error.message : 'Unknown error');
-    throw error;
+      updatedAt: created.updatedAt,
+    } as UserCredentialsModel);
   }
+
+  return created;
 };
 
 export const changeUserRole = async (
@@ -101,7 +74,7 @@ export const changeUserRole = async (
 
   const roleHistoryEntry = createRoleHistoryEntry(updated.id, current.role, updated.role, actorId, 'Cambio de rol');
   await repository.createAuditLog({
-    id: `audit-role-${updated.id}`,
+    id: `audit-role-${updated.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     entityType: 'user',
     entityId: updated.id,
     action: 'change_role',
@@ -123,10 +96,15 @@ export const updateUser = async (
     throw new Error('User not found');
   }
 
-  const updated = await repository.updateUser(user);
+  const userToUpdate: UserModel = {
+    ...user,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const updated = await repository.updateUser(userToUpdate);
 
   await repository.createAuditLog({
-    id: `audit-update-${updated.id}`,
+    id: `audit-update-${updated.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     entityType: 'user',
     entityId: updated.id,
     action: 'update_user',
@@ -166,6 +144,36 @@ export const changeUserStatus = async (
   });
 
   return updated;
+};
+
+export const deleteUser = async (
+  repository: UserRepository,
+  userId: string,
+  actorId: string,
+): Promise<void> => {
+  const current = await repository.getUserById(userId);
+  if (!current) {
+    throw new Error('User not found');
+  }
+
+  await repository.deleteUser(userId);
+
+  const auditEntry = createAuditEntry('user', userId, 'delete_user', actorId, {
+    deletedUser: current.fullName,
+    previousRole: current.role,
+    previousStatus: current.status,
+    accessToPanelRevoked: current.accessToPanel,
+  });
+
+  await repository.createAuditLog({
+    id: auditEntry.id,
+    entityType: auditEntry.entityType,
+    entityId: auditEntry.entityId,
+    action: auditEntry.action,
+    performedBy: auditEntry.performedBy,
+    details: auditEntry.details,
+    createdAt: auditEntry.createdAt,
+  });
 };
 
 export const loginUser = async (

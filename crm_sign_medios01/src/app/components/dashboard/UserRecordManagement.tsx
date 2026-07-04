@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Camera, Search } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { UserRecordForm } from "./UserRecordForm";
-import { createUser, fetchUsers, updateUser, updateUserStatus, type BackendUser } from "../../services/dashboardApi";
+import { createUser, deleteUserById, fetchUsers, updateUser, updateUserStatus, type BackendUser } from "../../services/dashboardApi";
 import { getCurrentUser } from "../../lib/auth";
 
 const USER_RECORDS_STORAGE_KEY = "crm-sign-user-records";
@@ -166,24 +166,24 @@ export function UserRecordManagement() {
   };
 
   const handleDeleteRecord = async (id: string) => {
-    if (confirm("¿Estás seguro de que deseas suspender esta ficha?")) {
+    if (confirm("¿Estás seguro de que deseas eliminar esta ficha? Se revocará el acceso al panel si aplica.")) {
       setIsSaving(true);
       setStatusMessage(null);
       const currentUser = getCurrentUser();
       const role = currentUser?.role ?? "agent";
       try {
-        const updated = await updateUserStatus(id, "suspended", role);
-        const nextRecords = records.map((record) => record.id === id ? { ...record, role: updated.status === "suspended" ? "Suspendido" as UserRole : record.role } : record);
+        await deleteUserById(id, role);
+        const nextRecords = records.filter((record) => record.id !== id);
         persistRecords(nextRecords);
-        setStatusMessage("✓ Ficha suspendida correctamente");
+        setStatusMessage("✓ Ficha eliminada correctamente");
         setTimeout(() => setStatusMessage(null), 3000);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Error desconocido";
-        console.error("Error al suspender ficha:", errorMsg);
+        console.error("Error al eliminar ficha:", errorMsg);
         if (errorMsg.includes("Unauthorized")) {
-          setStatusMessage("❌ No tienes permisos para suspender fichas.");
+          setStatusMessage("❌ No tienes permisos para eliminar fichas.");
         } else {
-          setStatusMessage(`❌ Error al suspender: ${errorMsg}`);
+          setStatusMessage(`❌ Error al eliminar ficha: ${errorMsg}`);
         }
       } finally {
         setIsSaving(false);

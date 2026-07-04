@@ -135,6 +135,11 @@ export class PostgresUserRepository implements UserRepository {
     return (rows[0] as UserModel | undefined) ?? null;
   }
 
+  async deleteUser(id: string): Promise<void> {
+    const db = await getDatabaseClient();
+    await db.query('DELETE FROM users WHERE id = $1', [id]);
+  }
+
   async upsertCredentials(credentials: UserCredentialsModel): Promise<UserCredentialsModel> {
     const db = await getDatabaseClient();
     await db.query(

@@ -28,6 +28,7 @@ export interface UserRepository {
   updateUser(user: UserModel): Promise<UserModel>;
   updateUserRole(id: string, role: UserModel['role'], actorId: string): Promise<UserModel | null>;
   updateUserStatus(id: string, status: UserModel['status']): Promise<UserModel | null>;
+  deleteUser(id: string): Promise<void>;
   upsertCredentials(credentials: UserCredentialsModel): Promise<UserCredentialsModel>;
   createAuditLog(entry: AuditLogModel): Promise<void>;
 }

@@ -158,11 +158,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/users': {
-        target: 'http://localhost:8888',
+        target: 'http://localhost:3000',
         changeOrigin: true,
       },
       '/api/auth': {
-        target: 'http://localhost:8888',
+        target: 'http://localhost:3000',
         changeOrigin: true,
       },
     },

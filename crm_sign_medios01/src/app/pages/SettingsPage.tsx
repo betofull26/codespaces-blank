@@ -17,7 +17,6 @@ import {
 ══════════════════════════════════════════════════════ */
 type BackupStatus = "idle" | "running" | "done" | "error";
 type BackupRecord = { label: string; time: string; type: "chats" | "contacts" | "full" };
-
 type Role = "Administrador" | "Supervisor" | "Agente";
 
 /* ══════════════════════════════════════════════════════
@@ -178,7 +177,8 @@ function RoleBadge({ role }: { role: Role }) {
 ══════════════════════════════════════════════════════ */
 const TABS = [
   { id: "backup", label: "Copias de seguridad", icon: <HardDrive size={15} /> },
-  { id: "team",   label: "Equipo y permisos",   icon: <Users size={15} /> },
+  { id: "team", label: "Equipo y permisos", icon: <Users size={15} /> },
+  { id: "activity", label: "Registro de actividad", icon: <Clock size={15} /> },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -444,11 +444,7 @@ export function SettingsPage() {
           ════════════════════════════════════════ */}
           {activeTab === "team" && (
             <div className="grid gap-6 lg:grid-cols-3">
-              {/* ── Left col: members + invitations ── */}
               <div className="flex flex-col gap-5 lg:col-span-2">
-
-                {/* Members list */}
-                {/* Gestión de Fichas (copiada desde UserManagementPage) */}
                 <div className="mb-6">
                   <div className="mb-5">
                     <h1 className="text-2xl font-bold text-slate-800">Gestión de Fichas</h1>
@@ -456,10 +452,8 @@ export function SettingsPage() {
                   </div>
                   <UserRecordManagement />
                 </div>
-
               </div>
 
-              {/* ── Right col: role reference ── */}
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2">
                   <Shield size={18} className="text-blue-600" />
@@ -484,6 +478,36 @@ export function SettingsPage() {
                     Solo el Administrador puede modificar roles, suspender accesos y enviar invitaciones.
                   </p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "activity" && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="rounded-lg bg-slate-100 p-2.5 text-slate-600">
+                  <Clock size={18} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Registro de actividad</h3>
+                  <p className="mt-1 text-sm text-slate-600">Consulta los movimientos recientes de usuarios, roles y accesos.</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {[
+                  { user: "Ana Martínez", action: "Creó una ficha de usuario y asignó el rol de Supervisor", time: "Hace 10 minutos" },
+                  { user: "Luis Torres", action: "Actualizó el acceso del usuario y cambió su estado a activo", time: "Hace 32 minutos" },
+                  { user: "Carla Rojas", action: "Eliminó una ficha y revocó el acceso al panel", time: "Hace 1 hora" },
+                ].map((item) => (
+                  <div key={item.user} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-800">{item.user}</p>
+                      <span className="text-xs text-slate-500">{item.time}</span>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-600">{item.action}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}

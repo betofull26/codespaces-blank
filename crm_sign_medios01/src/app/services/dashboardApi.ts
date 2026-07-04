@@ -124,3 +124,12 @@ export async function updateUserStatus(userId: string, status: BackendUser["stat
     body: JSON.stringify({ status }),
   });
 }
+
+export async function deleteUserById(userId: string, role: string): Promise<void> {
+  await requestJson<void>(`/users/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+    headers: {
+      "x-user-role": role,
+    },
+  });
+}

@@ -25,7 +25,7 @@ export const createRoleHistoryEntry = (
   changedBy: string,
   reason: string,
 ): RoleHistoryEntry => ({
-  id: `role-history-${userId}`,
+  id: `role-history-${userId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   userId,
   previousRole,
   newRole,
@@ -41,7 +41,7 @@ export const createAuditEntry = (
   performedBy: string,
   details: Record<string, unknown>,
 ): AuditEntry => ({
-  id: `audit-${entityId}-${action}`,
+  id: `audit-${entityId}-${action}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   entityType,
   entityId,
   action,

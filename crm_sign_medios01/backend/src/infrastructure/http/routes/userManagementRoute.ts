@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { changeUserRole, changeUserStatus, createUser, getUserById, listUsers, loginUser, updateUser } from '../../../application/userManagement.js';
+import { changeUserRole, changeUserStatus, createUser, deleteUser, getUserById, listUsers, loginUser, updateUser } from '../../../application/userManagement.js';
 import { ensureAuthorized } from '../../../application/authorization.js';
 import { buildSuccessResponse, buildErrorResponse } from '../../../common/apiResponse.js';
 import { PostgresUserRepository } from '../../../infrastructure/database/repositories.js';
@@ -38,7 +38,9 @@ userManagementRouter.post('/users', async (req, res) => {
     const user = await createUser(repository, req.body, req.body.actorId ?? 'system');
     res.json(buildSuccessResponse(user, 'Usuario creado correctamente'));
   } catch (error) {
-    res.status(400).json(buildErrorResponse('No se pudo crear el usuario', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));
+    console.error('[POST /users] Error creating user:', error);
+    const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+    res.status(400).json(buildErrorResponse('No se pudo crear el usuario', message));
   }
 });
 
@@ -70,11 +72,36 @@ userManagementRouter.patch('/users/:id/status', async (req, res) => {
   try {
     const role = (req.headers['x-user-role'] as string | undefined) ?? 'agent';
     ensureAuthorized(role as 'admin' | 'supervisor' | 'agent', 'manage-users');
+    
+    const status = req.body.status;
+    if (!status || !['active', 'inactive', 'suspended'].includes(status)) {
+      return res.status(400).json(buildErrorResponse('Estado inválido', 'INVALID_STATUS'));
+    }
+
     const repository = new PostgresUserRepository();
-    const user = await changeUserStatus(repository, req.params.id, req.body.status, req.body.actorId ?? 'system');
+    const user = await changeUserStatus(repository, req.params.id, status as 'active' | 'inactive' | 'suspended', req.body.actorId ?? 'system');
+    
+    if (!user) {
+      return res.status(404).json(buildErrorResponse('Usuario no encontrado', 'USER_NOT_FOUND'));
+    }
+
     res.json(buildSuccessResponse(user, 'Estado actualizado correctamente'));
   } catch (error) {
     res.status(400).json(buildErrorResponse('No se pudo actualizar el estado', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));
+  }
+});
+
+userManagementRouter.delete('/users/:id', async (req, res) => {
+  try {
+    const role = (req.headers['x-user-role'] as string | undefined) ?? 'agent';
+    ensureAuthorized(role as 'admin' | 'supervisor' | 'agent', 'manage-users');
+
+    const repository = new PostgresUserRepository();
+    await deleteUser(repository, req.params.id, req.body.actorId ?? 'system');
+
+    res.json(buildSuccessResponse(null, 'Ficha eliminada correctamente'));
+  } catch (error) {
+    res.status(400).json(buildErrorResponse('No se pudo eliminar la ficha', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));
   }
 });
 
