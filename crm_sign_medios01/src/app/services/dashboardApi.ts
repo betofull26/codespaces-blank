@@ -36,15 +36,19 @@ async function requestApiData<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function fetchAgents(): Promise<Agent[]> {
-  return requestJson<Agent[]>("/agents");
+  return requestApiData<Agent[]>('/agents');
+}
+
+export async function fetchConversations(): Promise<Conversation[]> {
+  return requestApiData<Conversation[]>('/conversations');
 }
 
 export async function fetchAgentConversations(agentId: string): Promise<Conversation[]> {
-  return requestJson<Conversation[]>(`/agents/${encodeURIComponent(agentId)}/conversations`);
+  return requestApiData<Conversation[]>(`/agents/${encodeURIComponent(agentId)}/conversations`);
 }
 
 export async function fetchConversationMessages(conversationId: string): Promise<ChatMessage[]> {
-  return requestJson<ChatMessage[]>(`/conversations/${encodeURIComponent(conversationId)}/messages`);
+  return requestApiData<ChatMessage[]>(`/conversations/${encodeURIComponent(conversationId)}/messages`);
 }
 
 export interface InterventionPayload {
@@ -57,14 +61,14 @@ export async function postConversationIntervention(
   conversationId: string,
   payload: InterventionPayload,
 ): Promise<ChatMessage> {
-  return requestJson<ChatMessage>(`/conversations/${encodeURIComponent(conversationId)}/interventions`, {
+  return requestApiData<ChatMessage>(`/conversations/${encodeURIComponent(conversationId)}/interventions`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function updateConversationStatus(conversationId: string, status: string): Promise<Conversation> {
-  return requestJson<Conversation>(`/conversations/${encodeURIComponent(conversationId)}`, {
+  return requestApiData<Conversation>(`/conversations/${encodeURIComponent(conversationId)}`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
   });
@@ -77,6 +81,55 @@ export interface WhatsAppWebhookPayload {
   timestamp: string;
   conversationId?: string;
   agentId?: string;
+}
+
+export interface BackupRecordDto {
+  id: string;
+  backupType: string;
+  fileName: string;
+  createdAt: string;
+  status: string;
+  filePath?: string | null;
+  fileUrl?: string | null;
+}
+
+export interface AuditLogDto {
+  id: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  performedBy: string;
+  details: string;
+  createdAt: string;
+}
+
+export async function fetchBackups(): Promise<BackupRecordDto[]> {
+  return requestApiData<BackupRecordDto[]>('/backups');
+}
+
+export async function createBackup(backupType: string = 'chats'): Promise<BackupRecordDto> {
+  return requestApiData<BackupRecordDto>('/backups', {
+    method: 'POST',
+    body: JSON.stringify({ backupType }),
+  });
+}
+
+export async function fetchAuditLogs(): Promise<AuditLogDto[]> {
+  return requestApiData<AuditLogDto[]>('/audit-logs');
+}
+
+export async function downloadBackup(backupId: string): Promise<Blob> {
+  const response = await fetch(`/api/backups/download/${encodeURIComponent(backupId)}`, {
+    headers: {
+      Authorization: `Bearer ${typeof window !== 'undefined' ? window.localStorage.getItem('crm_session_token') ?? '' : ''}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  return response.blob();
 }
 
 export async function postWhatsAppWebhook(payload: WhatsAppWebhookPayload): Promise<{ success: boolean }> {

@@ -15,6 +15,7 @@ export interface ConversationModel {
   topic: string;
   status: 'active' | 'closed' | 'waiting';
   startTime: string;
+  phone?: string | null;
 }
 
 export interface MessageModel {

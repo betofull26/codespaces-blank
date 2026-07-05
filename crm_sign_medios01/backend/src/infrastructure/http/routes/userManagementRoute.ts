@@ -1,20 +1,25 @@
-import { Router } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { changeUserRole, changeUserStatus, createUser, deleteUser, getUserById, listUsers, loginUser, revokeSessionToken, updateUser, validateLoginPayload } from '../../../application/userManagement.js';
 import { ensureAuthorized } from '../../../application/authorization.js';
 import { buildSuccessResponse, buildErrorResponse } from '../../../common/apiResponse.js';
+import type { AuthenticatedUser } from '../../../domain/repositories.js';
 import { PostgresUserRepository } from '../../../infrastructure/database/repositories.js';
 import { authenticateRequest } from '../middleware/authMiddleware.js';
 
+interface AuthenticatedRequest extends Request {
+  user?: AuthenticatedUser;
+}
+
 export const userManagementRouter = Router();
 
-const requireAuth = async (req: any, res: any, next: any) => {
+const requireAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   await authenticateRequest(req, res, next);
 };
 
 userManagementRouter.use('/users', requireAuth);
 userManagementRouter.use('/auth/me', requireAuth);
 
-userManagementRouter.get('/users', async (req, res) => {
+userManagementRouter.get('/users', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
     ensureAuthorized(role, 'view-users');
@@ -28,12 +33,13 @@ userManagementRouter.get('/users', async (req, res) => {
   }
 });
 
-userManagementRouter.get('/users/:id', async (req, res) => {
+userManagementRouter.get('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
     ensureAuthorized(role, 'view-users');
     const repository = new PostgresUserRepository();
-    const user = await getUserById(repository, req.params.id);
+    const user = await getUserById(repository, id);
     res.json(buildSuccessResponse(user, 'Usuario obtenido correctamente'));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
@@ -42,7 +48,7 @@ userManagementRouter.get('/users/:id', async (req, res) => {
   }
 });
 
-userManagementRouter.post('/users', async (req, res) => {
+userManagementRouter.post('/users', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
     ensureAuthorized(role, 'manage-users');
@@ -57,7 +63,7 @@ userManagementRouter.post('/users', async (req, res) => {
   }
 });
 
-userManagementRouter.put('/users/:id', async (req, res) => {
+userManagementRouter.put('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
     ensureAuthorized(role, 'manage-users');
@@ -71,12 +77,14 @@ userManagementRouter.put('/users/:id', async (req, res) => {
   }
 });
 
-userManagementRouter.patch('/users/:id/role', async (req, res) => {
+userManagementRouter.patch('/users/:id/role', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const actorId = typeof req.body?.actorId === 'string' ? req.body.actorId : 'system';
     const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
     ensureAuthorized(role, 'manage-users');
     const repository = new PostgresUserRepository();
-    const user = await changeUserRole(repository, req.params.id, req.body.role, req.body.actorId ?? 'system');
+    const user = await changeUserRole(repository, id, req.body.role, actorId);
     res.json(buildSuccessResponse(user, 'Rol actualizado correctamente'));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
@@ -85,8 +93,10 @@ userManagementRouter.patch('/users/:id/role', async (req, res) => {
   }
 });
 
-userManagementRouter.patch('/users/:id/status', async (req, res) => {
+userManagementRouter.patch('/users/:id/status', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const actorId = typeof req.body?.actorId === 'string' ? req.body.actorId : 'system';
     const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
     ensureAuthorized(role, 'manage-users');
     
@@ -96,7 +106,7 @@ userManagementRouter.patch('/users/:id/status', async (req, res) => {
     }
 
     const repository = new PostgresUserRepository();
-    const user = await changeUserStatus(repository, req.params.id, status as 'active' | 'inactive' | 'suspended', req.body.actorId ?? 'system');
+    const user = await changeUserStatus(repository, id, status as 'active' | 'inactive' | 'suspended', actorId);
     
     if (!user) {
       return res.status(404).json(buildErrorResponse('Usuario no encontrado', 'USER_NOT_FOUND'));
@@ -110,13 +120,15 @@ userManagementRouter.patch('/users/:id/status', async (req, res) => {
   }
 });
 
-userManagementRouter.delete('/users/:id', async (req, res) => {
+userManagementRouter.delete('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const actorId = typeof req.body?.actorId === 'string' ? req.body.actorId : 'system';
     const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
     ensureAuthorized(role, 'manage-users');
 
     const repository = new PostgresUserRepository();
-    await deleteUser(repository, req.params.id, req.body.actorId ?? 'system');
+    await deleteUser(repository, id, actorId);
 
     res.json(buildSuccessResponse(null, 'Ficha eliminada correctamente'));
   } catch (error) {
@@ -126,7 +138,7 @@ userManagementRouter.delete('/users/:id', async (req, res) => {
   }
 });
 
-userManagementRouter.post('/auth/login', async (req, res) => {
+userManagementRouter.post('/auth/login', async (req: Request, res: Response) => {
   try {
     const { username, password } = validateLoginPayload(req.body);
     const repository = new PostgresUserRepository();
@@ -146,7 +158,7 @@ userManagementRouter.post('/auth/login', async (req, res) => {
   }
 });
 
-userManagementRouter.post('/auth/logout', async (req, res) => {
+userManagementRouter.post('/auth/logout', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7).trim() : '';
   const tokenFromCookie = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('crm_session='))?.slice('crm_session='.length);
   const sessionToken = token || tokenFromCookie || '';

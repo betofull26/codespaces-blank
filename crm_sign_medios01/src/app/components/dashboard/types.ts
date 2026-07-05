@@ -15,6 +15,7 @@ export interface Conversation {
   topic: string;
   status: "active" | "closed" | "waiting";
   startTime: string;
+  phone?: string | null;
   messages: ChatMessage[];
 }
 

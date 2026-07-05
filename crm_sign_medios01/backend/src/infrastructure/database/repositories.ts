@@ -40,15 +40,21 @@ export class PostgresConversationRepository implements ConversationRepository {
 
   async getByAgentId(agentId: string): Promise<ConversationModel[]> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, agent_id AS "agentId", client_name AS "clientName", topic, status, start_time AS "startTime" FROM conversations WHERE agent_id = $1 ORDER BY start_time DESC', [agentId]);
+    const rows = await db.query('SELECT id, agent_id AS "agentId", client_name AS "clientName", topic, status, start_time AS "startTime", phone FROM conversations WHERE agent_id = $1 ORDER BY start_time DESC', [agentId]);
     return rows as ConversationModel[];
+  }
+
+  async getByClientPhone(phone: string): Promise<ConversationModel | null> {
+    const db = await getDatabaseClient();
+    const rows = await db.query('SELECT id, agent_id AS "agentId", client_name AS "clientName", topic, status, start_time AS "startTime", phone FROM conversations WHERE phone = $1 ORDER BY start_time DESC LIMIT 1', [phone]);
+    return (rows[0] as ConversationModel | undefined) ?? null;
   }
 
   async create(conversation: ConversationModel): Promise<ConversationModel> {
     const db = await getDatabaseClient();
     await db.query(
-      'INSERT INTO conversations (id, agent_id, client_name, topic, status, start_time) VALUES ($1, $2, $3, $4, $5, $6)',
-      [conversation.id, conversation.agentId, conversation.clientName, conversation.topic, conversation.status, conversation.startTime],
+      'INSERT INTO conversations (id, agent_id, client_name, topic, status, start_time, phone) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [conversation.id, conversation.agentId, conversation.clientName, conversation.topic, conversation.status, conversation.startTime, conversation.phone ?? null],
     );
     return conversation;
   }

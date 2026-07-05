@@ -1,4 +1,4 @@
-import { MessageSquare, Phone } from "lucide-react";
+import { Phone } from "lucide-react";
 import type { Agent } from "./types";
 
 interface AgentCardProps {
@@ -8,9 +8,6 @@ interface AgentCardProps {
 }
 
 export function AgentCard({ agent, isSelected, onClick }: AgentCardProps) {
-  const conversations = agent.conversations ?? [];
-  const activeConversations = conversations.filter((c) => c.status === "active").length;
-
   return (
     <div
       onClick={() => onClick(agent)}
@@ -59,12 +56,6 @@ export function AgentCard({ agent, isSelected, onClick }: AgentCardProps) {
           {agent.online ? "Conectado" : "Desconectado"}
         </span>
 
-        {agent.online && activeConversations > 0 && (
-          <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-            <MessageSquare size={11} />
-            {activeConversations}
-          </span>
-        )}
       </div>
 
       <div className="flex items-center justify-between">

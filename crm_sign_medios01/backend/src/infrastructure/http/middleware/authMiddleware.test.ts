@@ -73,5 +73,7 @@ test('authenticateRequest accepts a valid bearer token and exposes the user cont
   assert.equal(nextCalled, true);
   assert.equal(req.user?.userId, 'user-1');
   assert.equal(req.user?.role, 'admin');
-  assert.equal((await verifySessionToken(token, new PostgresUserRepository())).userId, 'user-1');
+  const verified = await verifySessionToken(token, new PostgresUserRepository());
+  assert.ok(!('reason' in verified));
+  assert.equal(verified.userId, 'user-1');
 });

@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
-import { agentsData } from "../components/dashboard/agentsData";
-import JSZip from "jszip";
 import { UserRecordManagement } from "../components/dashboard/UserRecordManagement";
 import { getCurrentUser } from "../lib/auth";
+import { createBackup, downloadBackup, fetchAgents, fetchAgentConversations, fetchAuditLogs, fetchBackups, type AuditLogDto, type BackupRecordDto } from "../services/dashboardApi";
+import type { Agent, Conversation } from "../components/dashboard/types";
 import {
   Download, MessageSquare, Users, HardDrive, CheckCircle2, Loader2,
   Clock, FileText, ShieldCheck, AlertCircle, SlidersHorizontal,
@@ -20,17 +19,6 @@ type BackupRecord = { label: string; time: string; type: "chats" | "contacts" | 
 type Role = "Administrador" | "Supervisor" | "Agente";
 
 /* ══════════════════════════════════════════════════════
-   MOCK DATA
-══════════════════════════════════════════════════════ */
-const mockContacts = [
-  { id: "1", name: "María González",  phone: "+52 55 1234 5678", assignedTo: "Roberto Sánchez" },
-  { id: "2", name: "Juan Pérez",      phone: "+52 55 8765 4321", assignedTo: "Patricia Ruiz" },
-  { id: "3", name: "Ana Martínez",    phone: "+52 55 2468 1357", assignedTo: "Miguel Torres" },
-  { id: "4", name: "Carlos López",    phone: "+52 55 9876 5432", assignedTo: null },
-  { id: "5", name: "Laura Fernández", phone: "+52 55 3691 2580", assignedTo: "Sofía Vargas" },
-];
-
-/* ══════════════════════════════════════════════════════
    HELPERS
 ══════════════════════════════════════════════════════ */
 function downloadBlob(blob: Blob, filename: string) {
@@ -41,40 +29,8 @@ function downloadBlob(blob: Blob, filename: string) {
   a.click();
   URL.revokeObjectURL(url);
 }
-function downloadCSV(rows: string[][], filename: string) {
-  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  downloadBlob(blob, filename);
-}
 function timestamp() {
   return new Date().toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-function chatTranscript(agentName: string, conversation: { clientName: string; topic: string; status: string; startTime: string; messages: { type: string; text: string; time: string; authorName?: string; authorInitials?: string; }[]; }) {
-  const header = [
-    `Agente: ${agentName}`,
-    `Cliente: ${conversation.clientName}`,
-    `Tema: ${conversation.topic}`,
-    `Estado: ${conversation.status}`,
-    `Inicio: ${conversation.startTime}`,
-    "",
-  ].join("\n");
-
-  const body = conversation.messages.map((msg, index) => {
-    const sender = msg.type === "whatsapp_out" ? "Agente" : msg.type === "whatsapp_in" ? "Cliente" : "Nota interna";
-    const author = msg.authorName ? ` (${msg.authorName})` : "";
-    const attachmentNote = (msg as any).attachment ? ` [Adjunto: ${(msg as any).attachment.name || "archivo"}]` : "";
-    return `${index + 1}. [${msg.time}] ${sender}${author}: ${msg.text}${attachmentNote}`;
-  }).join("\n");
-
-  return `${header}${body}`;
-}
-
-async function simulate(setter: (s: BackupStatus) => void, fn: () => Promise<void> | void, onRecord: () => void) {
-  setter("running");
-  setTimeout(async () => {
-    try { await fn(); setter("done"); onRecord(); setTimeout(() => setter("idle"), 4000); }
-    catch { setter("error"); }
-  }, 1200);
 }
 
 /* ══════════════════════════════════════════════════════
@@ -159,20 +115,6 @@ function BackupCard({ icon, title, description, formats, status, onBackupZip, on
 }
 
 /* ══════════════════════════════════════════════════════
-   SUB-COMPONENTS — Team
-══════════════════════════════════════════════════════ */
-
-/* Role badge */
-function RoleBadge({ role }: { role: Role }) {
-  const cfg = roleConfig[role];
-  return (
-    <span className={["inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", cfg.bg, cfg.color].join(" ")}>
-      {cfg.icon}{role}
-    </span>
-  );
-}
-
-/* ══════════════════════════════════════════════════════
    TABS
 ══════════════════════════════════════════════════════ */
 const TABS = [
@@ -186,104 +128,222 @@ type Tab = (typeof TABS)[number]["id"];
    PAGE
 ══════════════════════════════════════════════════════ */
 export function SettingsPage() {
-  const navigate = useNavigate();
+  const navigateTo = (path: string) => {
+    if (typeof window !== "undefined") {
+      window.location.assign(path);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<Tab>("backup");
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [chatsStatus, setChatsStatus] = useState<BackupStatus>("idle");
   const [contactsStatus, setContactsStatus] = useState<BackupStatus>("idle");
   const [fullStatus, setFullStatus] = useState<BackupStatus>("idle");
-  const [selectedAgentId, setSelectedAgentId] = useState<string>(agentsData[0]?.id ?? "");
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [selectedAgentConversations, setSelectedAgentConversations] = useState<Conversation[]>([]);
   const [history, setHistory] = useState<BackupRecord[]>([]);
+  const [activityLog, setActivityLog] = useState<AuditLogDto[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isActivityLoading, setIsActivityLoading] = useState(true);
+  const [isAgentsLoading, setIsAgentsLoading] = useState(true);
   useEffect(() => {
     const currentUser = getCurrentUser();
     if (!currentUser) {
-      navigate("/", { replace: true });
+      navigateTo("/");
       return;
     }
 
     if (currentUser.role === "agent") {
-      navigate("/dashboard", { replace: true });
+      navigateTo("/dashboard");
       return;
     }
 
     setIsAuthorized(true);
-  }, [navigate]);
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthorized) {
+      return;
+    }
+
+    let active = true;
+    const loadAgents = async () => {
+      setIsAgentsLoading(true);
+      try {
+        const data = await fetchAgents();
+        if (!active) return;
+        setAgents(data);
+        if (data.length > 0 && !selectedAgentId) {
+          setSelectedAgentId(data[0].id);
+        }
+      } catch (error) {
+        if (!active) return;
+        setAgents([]);
+      } finally {
+        if (active) setIsAgentsLoading(false);
+      }
+    };
+
+    void loadAgents();
+    return () => {
+      active = false;
+    };
+  }, [isAuthorized, selectedAgentId]);
+
+  useEffect(() => {
+    if (!isAuthorized || !selectedAgentId) {
+      setSelectedAgentConversations([]);
+      return;
+    }
+
+    let active = true;
+    const loadConversations = async () => {
+      try {
+        const data = await fetchAgentConversations(selectedAgentId);
+        if (!active) return;
+        setSelectedAgentConversations(data);
+      } catch (error) {
+        if (!active) return;
+        setSelectedAgentConversations([]);
+      }
+    };
+
+    void loadConversations();
+    return () => {
+      active = false;
+    };
+  }, [isAuthorized, selectedAgentId]);
+
+  useEffect(() => {
+    if (!isAuthorized) {
+      return;
+    }
+
+    let active = true;
+    const loadBackups = async () => {
+      setIsHistoryLoading(true);
+      setHistoryError(null);
+      try {
+        const backups = await fetchBackups();
+        if (!active) return;
+
+        const mapped: BackupRecord[] = backups.map((backup: BackupRecordDto) => ({
+          label: `${backup.backupType === "chats" ? "Respaldo de chats" : backup.backupType === "contacts" ? "Respaldo de contactos" : "Respaldo completo"} (${backup.fileName})`,
+          time: new Date(backup.createdAt).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+          type: (backup.backupType === "contacts" ? "contacts" : backup.backupType === "full" ? "full" : "chats") as BackupRecord["type"],
+        }));
+        setHistory(mapped);
+      } catch (error) {
+        if (!active) return;
+        setHistoryError(error instanceof Error ? error.message : "No se pudo cargar el historial");
+      } finally {
+        if (active) setIsHistoryLoading(false);
+      }
+    };
+
+    void loadBackups();
+    return () => {
+      active = false;
+    };
+  }, [isAuthorized]);
+
+  useEffect(() => {
+    if (!isAuthorized) {
+      return;
+    }
+
+    let active = true;
+    const loadActivity = async () => {
+      setIsActivityLoading(true);
+      setActivityError(null);
+      try {
+        const logs = await fetchAuditLogs();
+        if (!active) return;
+        setActivityLog(logs);
+      } catch (error) {
+        if (!active) return;
+        setActivityError(error instanceof Error ? error.message : "No se pudo cargar el registro de actividad");
+      } finally {
+        if (active) setIsActivityLoading(false);
+      }
+    };
+
+    void loadActivity();
+    return () => {
+      active = false;
+    };
+  }, [isAuthorized]);
 
   if (!isAuthorized) {
     return null;
   }
 
-  const totalChats = agentsData.reduce((a, ag) => a + (ag.conversations?.length ?? 0), 0);
-  const selectedAgent = agentsData.find((agent) => agent.id === selectedAgentId) ?? agentsData[0] ?? null;
-  const selectedAgentConversations = selectedAgent?.conversations ?? [];
-  const totalMsgs  = agentsData.reduce((a, ag) => a + (ag.conversations?.reduce((s, c) => s + c.messages.length, 0) ?? 0), 0);
+  const totalChats = selectedAgentConversations.length;
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null;
+  const totalMsgs = selectedAgentConversations.reduce((sum, conversation) => sum + (conversation.messages?.length ?? 0), 0);
 
-  const addRecord = (r: BackupRecord) => setHistory((h) => [r, ...h]);
+  const backupChatsZip = async () => {
+    setChatsStatus("running");
+    try {
+      const backup = await createBackup("chats");
+      const blob = await downloadBackup(backup.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = backup.fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setChatsStatus("done");
+      setHistory((current) => [{ label: `Respaldo de chats (ZIP) - ${selectedAgent?.name ?? "agente"}`, time: timestamp(), type: "chats" }, ...current]);
+      setTimeout(() => setChatsStatus("idle"), 3000);
+    } catch (error) {
+      setChatsStatus("error");
+      setHistoryError(error instanceof Error ? error.message : "No se pudo generar el respaldo");
+    }
+  };
 
-  const backupChatsZip = async () =>
-    simulate(setChatsStatus, async () => {
-      const zip = new JSZip();
+  const backupContactsCSV = async () => {
+    setContactsStatus("running");
+    try {
+      const backup = await createBackup("contacts");
+      const blob = await downloadBackup(backup.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = backup.fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setContactsStatus("done");
+      setHistory((current) => [{ label: "Respaldo de contactos (CSV)", time: timestamp(), type: "contacts" }, ...current]);
+      setTimeout(() => setContactsStatus("idle"), 3000);
+    } catch (error) {
+      setContactsStatus("error");
+      setHistoryError(error instanceof Error ? error.message : "No se pudo generar el respaldo");
+    }
+  };
 
-      if (selectedAgent) {
-        const agentNameSafe = selectedAgent.name.replace(/\s+/g, "_");
-        const summary = [
-          `Agente: ${selectedAgent.name}`,
-          `Rol: ${selectedAgent.role}`,
-          `Conversaciones: ${selectedAgentConversations.length}`,
-          `Mensajes: ${selectedAgentConversations.reduce((sum, conversation) => sum + conversation.messages.length, 0)}`,
-          "",
-        ].join("\n");
-        zip.file("resumen.txt", summary);
-
-        selectedAgentConversations.forEach((conversation, index) => {
-          const fileName = `chats/${agentNameSafe}/${String(index + 1).padStart(2, "0")}_${conversation.clientName.replace(/\s+/g, "_")}.txt`;
-          zip.file(fileName, chatTranscript(selectedAgent.name, {
-            clientName: conversation.clientName,
-            topic: conversation.topic,
-            status: conversation.status,
-            startTime: conversation.startTime,
-            messages: conversation.messages.map((msg) => ({
-              type: msg.sender === "agent" ? "whatsapp_out" : msg.sender === "client" ? "whatsapp_in" : "note",
-              text: msg.text,
-              time: msg.time,
-            })),
-          }));
-        });
-      } else {
-        zip.file("resumen.txt", "No hay agente seleccionado para respaldar.");
-      }
-
-      const content = await zip.generateAsync({ type: "blob" });
-      downloadBlob(content, `chats_${selectedAgent ? selectedAgent.name.replace(/\s+/g, "_").toLowerCase() : "agente"}_${Date.now()}.zip`);
-    }, () => addRecord({
-      label: `Respaldo de chats (ZIP) - ${selectedAgent?.name ?? "agente"}`,
-      time: timestamp(),
-      type: "chats",
-    }));
-
-  const backupContactsCSV = () =>
-    simulate(setContactsStatus, () => downloadCSV(
-      [["ID","Nombre","Teléfono","Asignado a"], ...mockContacts.map((c) => [c.id, c.name, c.phone, c.assignedTo ?? "Sin asignar"])],
-      `contactos_signmedios_${Date.now()}.csv`
-    ), () => addRecord({ label: "Respaldo de contactos (CSV)", time: timestamp(), type: "contacts" }));
-
-  const backupFullZip = async () =>
-    simulate(setFullStatus, async () => {
-      const zip = new JSZip();
-
-      // No chat conversations available without the agent panel.
-
-      // add contacts CSV
-      const csv = [["ID","Nombre","Teléfono","Asignado a"], ...mockContacts.map((c) => [c.id, c.name, c.phone, c.assignedTo ?? "Sin asignar"])].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
-      zip.file("contactos.csv", csv);
-
-      const content = await zip.generateAsync({ type: "blob" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(content);
-      a.download = `backup_completo_signmedios_${Date.now()}.zip`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }, () => addRecord({ label: "Respaldo completo (ZIP)", time: timestamp(), type: "full" }));
+  const backupFullZip = async () => {
+    setFullStatus("running");
+    try {
+      const backup = await createBackup("full");
+      const blob = await downloadBackup(backup.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = backup.fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setFullStatus("done");
+      setHistory((current) => [{ label: "Respaldo completo (ZIP)", time: timestamp(), type: "full" }, ...current]);
+      setTimeout(() => setFullStatus("idle"), 3000);
+    } catch (error) {
+      setFullStatus("error");
+      setHistoryError(error instanceof Error ? error.message : "No se pudo generar el respaldo");
+    }
+  };
 
   const typeIcon = (t: BackupRecord["type"]) => ({
     chats:    <MessageSquare size={13} className="text-blue-500" />,
@@ -330,10 +390,10 @@ export function SettingsPage() {
           {activeTab === "backup" && (
             <>
               <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard icon={<Users size={20} />}         label="Total de Agentes"  value={agentsData.length}   color="bg-blue-50 text-blue-600" />
+                <StatCard icon={<Users size={20} />}         label="Total de Agentes"  value={agents.length}   color="bg-blue-50 text-blue-600" />
                 <StatCard icon={<MessageSquare size={20} />} label="Conversaciones"    value={totalChats}           color="bg-emerald-50 text-emerald-600" />
                 <StatCard icon={<FileText size={20} />}      label="Mensajes totales"  value={totalMsgs}            color="bg-amber-50 text-amber-600" />
-                <StatCard icon={<Users size={20} />}         label="Contactos"         value={mockContacts.length}  color="bg-purple-50 text-purple-600" />
+                <StatCard icon={<Users size={20} />}         label="Contactos"         value={agents.length}  color="bg-purple-50 text-purple-600" />
               </div>
 
               <div className="grid gap-6 lg:grid-cols-3">
@@ -361,18 +421,24 @@ export function SettingsPage() {
                         onChange={(event) => setSelectedAgentId(event.target.value)}
                         className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
                       >
-                        {agentsData.map((agent) => (
-                          <option key={agent.id} value={agent.id}>
-                            {agent.name} — {agent.role}
-                          </option>
-                        ))}
+                        {isAgentsLoading ? (
+                          <option value="">Cargando agentes...</option>
+                        ) : agents.length === 0 ? (
+                          <option value="">No hay agentes disponibles</option>
+                        ) : (
+                          agents.map((agent) => (
+                            <option key={agent.id} value={agent.id}>
+                              {agent.name} — {agent.role}
+                            </option>
+                          ))
+                        )}
                       </select>
                     </div>
                   </BackupCard>
                   <BackupCard
                     icon={<Users size={18} />}
                     title="Respaldo de Contactos"
-                    description={`Exporta los ${mockContacts.length} contactos con sus asignaciones.`}
+                    description="Exporta los contactos del respaldo generado por el backend."
                     formats={["csv"]}
                     status={contactsStatus}
                     onBackupCSV={backupContactsCSV}
@@ -408,10 +474,20 @@ export function SettingsPage() {
                     <h3 className="font-semibold text-slate-800">Historial de respaldos</h3>
                   </div>
                   <div className="flex flex-1 flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
-                    {history.length === 0 ? (
+                    {isHistoryLoading ? (
+                      <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-slate-400">
+                        <Loader2 size={24} className="animate-spin" />
+                        <p className="text-sm">Cargando historial…</p>
+                      </div>
+                    ) : historyError ? (
+                      <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-amber-600">
+                        <AlertCircle size={24} />
+                        <p className="text-sm">{historyError}</p>
+                      </div>
+                    ) : history.length === 0 ? (
                       <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-slate-400">
                         <HardDrive size={32} className="opacity-30" />
-                        <p className="text-sm">Sin respaldos en esta sesión</p>
+                        <p className="text-sm">Sin respaldos registrados</p>
                       </div>
                     ) : (
                       <ul className="divide-y divide-slate-100">
@@ -495,19 +571,23 @@ export function SettingsPage() {
               </div>
 
               <div className="space-y-3">
-                {[
-                  { user: "Ana Martínez", action: "Creó una ficha de usuario y asignó el rol de Supervisor", time: "Hace 10 minutos" },
-                  { user: "Luis Torres", action: "Actualizó el acceso del usuario y cambió su estado a activo", time: "Hace 32 minutos" },
-                  { user: "Carla Rojas", action: "Eliminó una ficha y revocó el acceso al panel", time: "Hace 1 hora" },
-                ].map((item) => (
-                  <div key={item.user} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-slate-800">{item.user}</p>
-                      <span className="text-xs text-slate-500">{item.time}</span>
+                {isActivityLoading ? (
+                  <div className="flex items-center justify-center py-8 text-sm text-slate-500">Cargando actividad...</div>
+                ) : activityError ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">{activityError}</div>
+                ) : activityLog.length === 0 ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No hay actividad registrada.</div>
+                ) : (
+                  activityLog.map((item) => (
+                    <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-slate-800">{item.performedBy}</p>
+                        <span className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">{item.action} · {item.details}</p>
                     </div>
-                    <p className="mt-1 text-sm text-slate-600">{item.action}</p>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           )}

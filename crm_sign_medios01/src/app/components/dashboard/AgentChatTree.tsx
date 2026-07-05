@@ -5,7 +5,7 @@ import {
   Circle, ChevronRight,
   Send,
 } from "lucide-react";
-import { fetchAgentConversations, postConversationIntervention } from "../../services/dashboardApi";
+import { fetchAgentConversations, fetchConversationMessages, postConversationIntervention } from "../../services/dashboardApi";
 import type { Agent, Conversation, ChatMessage } from "./types";
 
 /* ─── Local supervisor message type ─────────────────── */
@@ -182,6 +182,7 @@ export function AgentChatTree({ agent, open, onClose }: AgentChatTreeProps) {
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, ChatMessage[]>>({});
   const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [interventionError, setInterventionError] = useState<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -227,9 +228,35 @@ export function AgentChatTree({ agent, open, onClose }: AgentChatTreeProps) {
     }
   }, [conversations, selectedConvId]);
 
+  useEffect(() => {
+    if (!selectedConvId) {
+      return;
+    }
+
+    let active = true;
+    const loadMessages = async () => {
+      try {
+        const data = await fetchConversationMessages(selectedConvId);
+        if (!active) return;
+        setMessagesByConversation((prev) => ({ ...prev, [selectedConvId]: data }));
+        setConversations((prev) => prev.map((conv) => (conv.id === selectedConvId ? { ...conv, messages: data } : conv)));
+      } catch (error) {
+        if (!active) return;
+        console.error("Error fetching conversation messages:", error);
+        setMessagesByConversation((prev) => ({ ...prev, [selectedConvId]: [] }));
+      }
+    };
+
+    loadMessages();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedConvId]);
+
   // Merge original + supervisor messages for display
   const allMessages: AnyMessage[] = selectedConv
-    ? [...selectedConv.messages, ...(supervisorMsgs[selectedConv.id] ?? [])]
+    ? [...(selectedConv.messages ?? []), ...(supervisorMsgs[selectedConv.id] ?? [])]
     : [];
 
   useEffect(() => {

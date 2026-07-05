@@ -28,11 +28,14 @@ CREATE TABLE IF NOT EXISTS conversations (
   topic TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
   start_time TEXT NOT NULL,
+  phone TEXT,
   CONSTRAINT fk_conversations_agent
     FOREIGN KEY (agent_id) REFERENCES agents(id)
     ON DELETE CASCADE
     ON UPDATE CASCADE
 );
+
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS phone TEXT;
 
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY,
@@ -68,6 +71,16 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   performed_by TEXT NOT NULL,
   details TEXT NOT NULL,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS backups (
+  id TEXT PRIMARY KEY,
+  backup_type TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  file_path TEXT,
+  file_url TEXT
 );
 
 CREATE TABLE IF NOT EXISTS user_sessions (

@@ -1,4 +1,24 @@
 import dotenv from 'dotenv';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const resolveEnvFile = (startDir = __dirname): string | undefined => {
+  const candidates = [
+    path.resolve(startDir, '.env'),
+    path.resolve(startDir, '..', '.env'),
+    path.resolve(startDir, '..', '..', '.env'),
+    path.resolve(startDir, '..', '..', '..', '.env'),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate));
+};
+
+const envFile = resolveEnvFile();
+dotenv.config({ path: envFile });
 
 dotenv.config();
 

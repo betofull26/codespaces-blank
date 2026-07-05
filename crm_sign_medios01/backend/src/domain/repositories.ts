@@ -10,6 +10,7 @@ export interface ConversationRepository {
   list(): Promise<ConversationModel[]>;
   getById(id: string): Promise<ConversationModel | null>;
   getByAgentId(agentId: string): Promise<ConversationModel[]>;
+  getByClientPhone(phone: string): Promise<ConversationModel | null>;
   create(conversation: ConversationModel): Promise<ConversationModel>;
 }
 
@@ -31,4 +32,9 @@ export interface UserRepository {
   createSession(session: SessionModel): Promise<void>;
   getSessionByTokenHash(tokenHash: string): Promise<SessionModel | null>;
   revokeSession(tokenHash: string): Promise<void>;
+}
+
+export interface AuthenticatedUser {
+  userId: string;
+  role: UserModel['role'];
 }

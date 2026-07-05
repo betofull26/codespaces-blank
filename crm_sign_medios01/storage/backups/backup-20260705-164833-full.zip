@@ -1,0 +1,16 @@
+agents.csv
+avatar,id,initials,name,online,phone,role
+,agent-1,CM,Carlos Mendoza,true,+58 412-555-0101,Agente Senior
+,agent-2,LG,Laura Gómez,false,+58 414-555-0102,Agente Junior
+
+
+conversations.csv
+agent_id,client_name,id,start_time,status,topic
+agent-1,Ana Pérez,conv-1,2026-07-02T09:18:00.000Z,active,Solicitud de presupuesto
+agent-2,Miguel Torres,conv-2,2026-07-02T10:00:00.000Z,waiting,Seguimiento de pedido
+
+
+messages.csv
+conversation_id,external_message_id,id,sender,source,text,time
+conv-1,wa-123,msg-1,client,whatsapp,"Hola, necesito información sobre el servicio.",2026-07-02T09:19:00.000Z
+conv-1,,msg-2,agent,dashboard,"Claro, te comparto los detalles.",2026-07-02T09:20:00.000Z

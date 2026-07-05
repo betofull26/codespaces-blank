@@ -22,6 +22,9 @@ test('createUser preserves the user data when accessToPanel is true', async () =
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
     createAuditLog: async () => undefined,
+    createSession: async () => undefined,
+    getSessionByTokenHash: async () => null,
+    revokeSession: async () => undefined,
   };
 
   const result = await createUser(repository, {
@@ -61,6 +64,9 @@ test('loginUser accepts legacy plain-text passwords for stored users', async () 
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
     createAuditLog: async () => undefined,
+    createSession: async () => undefined,
+    getSessionByTokenHash: async () => null,
+    revokeSession: async () => undefined,
   };
 
   const authenticated = await loginUser(repository, 'legacyuser', 'plain-password', 'admin');
@@ -315,6 +321,9 @@ test('loginUser does not expose password hashes in the returned user payload', a
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
     createAuditLog: async () => undefined,
+    createSession: async () => undefined,
+    getSessionByTokenHash: async () => null,
+    revokeSession: async () => undefined,
   };
 
   const authenticated = await loginUser(repository, 'marta.diaz', 'secret', 'admin');
@@ -345,6 +354,9 @@ test('loginUser authenticates only active users with panel access', async () => 
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
     createAuditLog: async () => undefined,
+    createSession: async () => undefined,
+    getSessionByTokenHash: async () => null,
+    revokeSession: async () => undefined,
   };
 
   const authenticated = await loginUser(repository, 'marta.diaz', 'secret', 'admin');

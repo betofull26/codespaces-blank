@@ -6,6 +6,8 @@ import { healthRouter } from '../infrastructure/http/routes/healthRoute.js';
 import { databaseRouter } from '../infrastructure/http/routes/databaseRoute.js';
 import { bootstrapRouter } from '../infrastructure/http/routes/bootstrapRoute.js';
 import { userManagementRouter } from '../infrastructure/http/routes/userManagementRoute.js';
+import { backupRouter } from '../infrastructure/http/routes/backupRoute.js';
+import { agentConversationRouter } from '../infrastructure/http/routes/agentConversationRoute.js';
 
 export const createApp = () => {
   const app = express();
@@ -18,6 +20,8 @@ export const createApp = () => {
   app.use('/api', databaseRouter);
   app.use('/api', bootstrapRouter);
   app.use('/api', userManagementRouter);
+  app.use('/api', backupRouter);
+  app.use('/api', agentConversationRouter);
 
   app.use((_req, res) => {
     res.status(404).json(buildErrorResponse('Ruta no encontrada', 'NOT_FOUND'));
