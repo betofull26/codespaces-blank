@@ -1,7 +1,30 @@
 import bcrypt from 'bcrypt';
-import type { UserModel, UserCredentialsModel } from '../domain/models.js';
+import crypto from 'node:crypto';
+import type { UserModel } from '../domain/models.js';
 import type { UserRepository } from '../domain/repositories.js';
 import { createAuditEntry, createRoleHistoryEntry } from './audit.js';
+
+const hashToken = (token: string): string => crypto.createHash('sha256').update(token).digest('hex');
+
+export const validateLoginPayload = (payload: unknown): { username: string; password: string } => {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid login payload');
+  }
+
+  const candidate = payload as Record<string, unknown>;
+  const username = typeof candidate.username === 'string' ? candidate.username.trim() : '';
+  const password = typeof candidate.password === 'string' ? candidate.password : '';
+
+  if (!username) {
+    throw new Error('username is required');
+  }
+
+  if (!password) {
+    throw new Error('password is required');
+  }
+
+  return { username, password };
+};
 
 export const listUsers = async (repository: UserRepository): Promise<UserModel[]> => {
   return repository.listUsers();
@@ -55,17 +78,6 @@ export const createUser = async (
 
   const created = await repository.createUser(userToCreate);
 
-  if (created.accessToPanel) {
-    await repository.upsertCredentials({
-      id: `cred-${created.id}`,
-      userId: created.id,
-      username: created.username,
-      passwordHash,
-      createdAt: created.createdAt,
-      updatedAt: created.updatedAt,
-    } as UserCredentialsModel);
-  }
-
   return created;
 };
 
@@ -83,17 +95,6 @@ export const changeUserRole = async (
   const updated = await repository.updateUserRole(userId, nextRole, actorId);
   if (!updated) {
     throw new Error('Failed to update role');
-  }
-
-  if (updated.role === 'agent') {
-    await repository.upsertCredentials({
-      id: `cred-${updated.id}`,
-      userId: updated.id,
-      username: updated.username,
-      passwordHash: updated.passwordHash,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-    } as UserCredentialsModel);
   }
 
   const roleHistoryEntry = createRoleHistoryEntry(updated.id, current.role, updated.role, actorId, 'Cambio de rol');
@@ -203,29 +204,99 @@ export const deleteUser = async (
   });
 };
 
+export const buildSessionToken = (userId: string, role: string): string => {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ sub: userId, role, iat: Math.floor(Date.now() / 1000) })).toString('base64url');
+  const signature = crypto.createHash('sha256').update(`${header}.${payload}`).digest('base64url');
+  return `${header}.${payload}.${signature}`;
+};
+
+export const createSessionRecord = async (repository: UserRepository, token: string, userId: string, role: UserModel['role']): Promise<void> => {
+  if (typeof repository.createSession !== 'function') {
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString();
+  await repository.createSession({
+    id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    userId,
+    tokenHash: hashToken(token),
+    role,
+    expiresAt,
+    createdAt: now,
+    updatedAt: now,
+    revokedAt: null,
+  });
+};
+
+export const revokeSessionToken = async (token: string, repository: UserRepository): Promise<void> => {
+  if (typeof repository.revokeSession === 'function') {
+    await repository.revokeSession(hashToken(token));
+  }
+};
+
+export const verifySessionToken = async (
+  token: string,
+  repository: UserRepository,
+): Promise<{ userId: string; role: string } | { reason: 'invalid' | 'revoked' | 'expired' }> => {
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    return { reason: 'invalid' };
+  }
+
+  const [header, payload, signature] = parts;
+  const expectedSignature = crypto.createHash('sha256').update(`${header}.${payload}`).digest('base64url');
+  if (signature !== expectedSignature) {
+    return { reason: 'invalid' };
+  }
+
+  try {
+    const decodedPayload = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { sub?: string; role?: string };
+    if (!decodedPayload.sub || !decodedPayload.role) {
+      return { reason: 'invalid' };
+    }
+
+    if (typeof repository.getSessionByTokenHash !== 'function') {
+      return { userId: decodedPayload.sub, role: decodedPayload.role };
+    }
+
+    const session = await repository.getSessionByTokenHash(hashToken(token));
+    if (!session) {
+      return { userId: decodedPayload.sub, role: decodedPayload.role };
+    }
+    if (session.revokedAt) {
+      return { reason: 'revoked' };
+    }
+    if (new Date(session.expiresAt) <= new Date()) {
+      return { reason: 'expired' };
+    }
+
+    return { userId: decodedPayload.sub, role: decodedPayload.role };
+  } catch {
+    return { reason: 'invalid' };
+  }
+};
+
 export const loginUser = async (
   repository: UserRepository,
   username: string,
   password: string,
   actorId: string,
-): Promise<{ user: UserModel; sessionToken: string }> => {
+): Promise<{ user: Omit<UserModel, 'passwordHash'>; sessionToken: string }> => {
   const user = await repository.getUserByUsername(username);
   if (!user || user.status !== 'active' || !user.accessToPanel) {
     throw new Error('Unauthorized');
   }
 
-  const credentials = await repository.getCredentialsByUsername(username);
-  const matches = await Promise.all([
-    passwordMatches(password, user.passwordHash),
-    passwordMatches(password, credentials?.passwordHash),
-  ]);
+  const matches = await passwordMatches(password, user.passwordHash);
 
-  if (!matches.some(Boolean)) {
+  if (!matches) {
     throw new Error('Unauthorized');
   }
 
   const nextHashedPassword = await hashPasswordIfNeeded(password);
-  const needsPasswordMigration = !isBcryptHash(user.passwordHash) || (credentials?.passwordHash ? !isBcryptHash(credentials.passwordHash) : false);
+  const needsPasswordMigration = !isBcryptHash(user.passwordHash);
 
   if (needsPasswordMigration) {
     await repository.updateUser({
@@ -233,15 +304,6 @@ export const loginUser = async (
       passwordHash: nextHashedPassword,
       updatedAt: new Date().toISOString(),
     });
-
-    await repository.upsertCredentials({
-      id: credentials?.id ?? `cred-${user.id}`,
-      userId: user.id,
-      username: user.username,
-      passwordHash: nextHashedPassword,
-      createdAt: credentials?.createdAt ?? user.createdAt,
-      updatedAt: new Date().toISOString(),
-    } as UserCredentialsModel);
   }
 
   const auditEntry = createAuditEntry('credential', user.id, 'login', actorId, { username });
@@ -255,8 +317,12 @@ export const loginUser = async (
     createdAt: auditEntry.createdAt,
   });
 
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  const sessionToken = buildSessionToken(user.id, user.role);
+  await createSessionRecord(repository, sessionToken, user.id, user.role);
+
   return {
-    user,
-    sessionToken: `token-${user.id}`,
+    user: safeUser,
+    sessionToken,
   };
 };

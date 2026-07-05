@@ -45,15 +45,6 @@ export interface UserModel {
   updatedAt: string;
 }
 
-export interface UserCredentialsModel {
-  id: string;
-  userId: string;
-  username: string;
-  passwordHash: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface AuditLogModel {
   id: string;
   entityType: string;
@@ -62,6 +53,17 @@ export interface AuditLogModel {
   performedBy: string;
   details: string;
   createdAt: string;
+}
+
+export interface SessionModel {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  role: 'admin' | 'agent' | 'supervisor';
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+  revokedAt?: string | null;
 }
 
 const assertRequired = (value: unknown, fieldName: string) => {

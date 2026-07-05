@@ -13,6 +13,24 @@ export type LoginResult =
   | { ok: true; user: AuthUser }
   | { ok: false; error: "invalid_credentials" | "server_error" };
 
+export async function logoutFromBackend(): Promise<void> {
+  const token = window.localStorage.getItem('crm_session_token');
+  if (!token) {
+    return;
+  }
+
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch {
+    // Ignore logout failures and still clear the client session.
+  }
+}
+
 export async function loginWithBackend(username: string, password: string): Promise<LoginResult> {
   try {
     const response = await fetch('/api/auth/login', {
@@ -28,6 +46,11 @@ export async function loginWithBackend(username: string, password: string): Prom
     const payload = await response.json();
     const data = payload?.data;
     const user = data?.user;
+    const sessionToken = data?.sessionToken;
+
+    if (sessionToken) {
+      window.localStorage.setItem('crm_session_token', sessionToken);
+    }
 
     if (!user) {
       return { ok: false, error: 'invalid_credentials' };
@@ -79,7 +102,33 @@ export function getCurrentUser(): AuthUser | null {
   return parseStoredUser(sessionStorage.getItem(STORAGE_KEY)) ?? parseStoredUser(localStorage.getItem(STORAGE_KEY));
 }
 
-export function clearCurrentUser() {
+export function hasActiveSession(): boolean {
+  return getCurrentUser() !== null;
+}
+
+export function isSessionExpired(): boolean {
+  if (typeof window === 'undefined') {
+    return true;
+  }
+
+  const token = window.localStorage.getItem('crm_session_token');
+  if (!token) {
+    return true;
+  }
+
+  try {
+    const [, payload] = token.split('.');
+    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    const expiresAt = decoded.exp ?? decoded.iat + 60 * 60 * 8;
+    return Date.now() / 1000 >= expiresAt;
+  } catch {
+    return true;
+  }
+}
+
+export async function clearCurrentUser() {
   sessionStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem('crm_session_token');
+  await logoutFromBackend();
 }

@@ -1,4 +1,4 @@
-import type { AgentModel, ConversationModel, MessageModel, UserModel, UserCredentialsModel, AuditLogModel } from '../../domain/models.js';
+import type { AgentModel, ConversationModel, MessageModel, UserModel, AuditLogModel, SessionModel } from '../../domain/models.js';
 import type { AgentRepository, ConversationRepository, MessageRepository, UserRepository } from '../../domain/repositories.js';
 import { getDatabaseClient } from './connection.js';
 
@@ -90,16 +90,10 @@ export class PostgresUserRepository implements UserRepository {
     return (rows[0] as UserModel | undefined) ?? null;
   }
 
-  async getCredentialsByUsername(username: string): Promise<UserCredentialsModel | null> {
-    const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, user_id AS "userId", username, password_hash AS "passwordHash", created_at AS "createdAt", updated_at AS "updatedAt" FROM user_credentials WHERE username = $1', [username]);
-    return (rows[0] as UserCredentialsModel | undefined) ?? null;
-  }
-
   async createUser(user: UserModel): Promise<UserModel> {
     const db = await getDatabaseClient();
     await db.query(
-      'INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+      'INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (id) DO NOTHING',
       [user.id, user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
     );
     return user;
@@ -107,10 +101,13 @@ export class PostgresUserRepository implements UserRepository {
 
   async updateUser(user: UserModel): Promise<UserModel> {
     const db = await getDatabaseClient();
-    await db.query(
-      'UPDATE users SET full_name = $1, username = $2, password_hash = $3, role = $4, status = $5, access_to_panel = $6, updated_at = $7 WHERE id = $8',
+    const result = await db.query(
+      'UPDATE users SET full_name = $1, username = $2, password_hash = $3, role = $4, status = $5, access_to_panel = $6, updated_at = $7 WHERE id = $8 RETURNING id',
       [user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.updatedAt, user.id],
     );
+    if (!Array.isArray(result) || result.length === 0) {
+      throw new Error('User not found');
+    }
     return user;
   }
 
@@ -134,20 +131,36 @@ export class PostgresUserRepository implements UserRepository {
     await db.query('DELETE FROM users WHERE id = $1', [id]);
   }
 
-  async upsertCredentials(credentials: UserCredentialsModel): Promise<UserCredentialsModel> {
-    const db = await getDatabaseClient();
-    await db.query(
-      'INSERT INTO user_credentials (id, user_id, username, password_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (user_id) DO UPDATE SET username = EXCLUDED.username, password_hash = EXCLUDED.password_hash, updated_at = EXCLUDED.updated_at',
-      [credentials.id, credentials.userId, credentials.username, credentials.passwordHash, credentials.createdAt, credentials.updatedAt],
-    );
-    return credentials;
-  }
-
   async createAuditLog(entry: AuditLogModel): Promise<void> {
     const db = await getDatabaseClient();
     await db.query(
       'INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, details, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
       [entry.id, entry.entityType, entry.entityId, entry.action, entry.performedBy, entry.details, entry.createdAt],
+    );
+  }
+
+  async createSession(session: SessionModel): Promise<void> {
+    const db = await getDatabaseClient();
+    await db.query(
+      'INSERT INTO user_sessions (id, user_id, token_hash, role, expires_at, created_at, updated_at, revoked_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [session.id, session.userId, session.tokenHash, session.role, session.expiresAt, session.createdAt, session.updatedAt, session.revokedAt ?? null],
+    );
+  }
+
+  async getSessionByTokenHash(tokenHash: string): Promise<SessionModel | null> {
+    const db = await getDatabaseClient();
+    const rows = await db.query(
+      'SELECT id, user_id AS "userId", token_hash AS "tokenHash", role, expires_at AS "expiresAt", created_at AS "createdAt", updated_at AS "updatedAt", revoked_at AS "revokedAt" FROM user_sessions WHERE token_hash = $1',
+      [tokenHash],
+    );
+    return (rows[0] as SessionModel | undefined) ?? null;
+  }
+
+  async revokeSession(tokenHash: string): Promise<void> {
+    const db = await getDatabaseClient();
+    await db.query(
+      'UPDATE user_sessions SET revoked_at = $1, updated_at = $1 WHERE token_hash = $2',
+      [new Date().toISOString(), tokenHash],
     );
   }
 }

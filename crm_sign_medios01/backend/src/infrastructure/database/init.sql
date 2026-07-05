@@ -60,19 +60,6 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS user_credentials (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL UNIQUE,
-  username TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  CONSTRAINT fk_user_credentials_user
-    FOREIGN KEY (user_id) REFERENCES users(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   entity_type TEXT NOT NULL,
@@ -81,6 +68,17 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   performed_by TEXT NOT NULL,
   details TEXT NOT NULL,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  revoked_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_conversations_agent_id ON conversations(agent_id);
@@ -110,7 +108,3 @@ VALUES
   ('user-admin-1', 'Administrador', 'admin', 'secret', 'admin', 'active', TRUE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO user_credentials (id, user_id, username, password_hash, created_at, updated_at)
-VALUES
-  ('cred-admin-1', 'user-admin-1', 'admin', 'secret', '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z')
-ON CONFLICT (id) DO NOTHING;

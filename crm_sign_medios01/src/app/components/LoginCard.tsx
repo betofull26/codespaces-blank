@@ -18,15 +18,9 @@ function validate(username: string, password: string): FieldErrors {
   const errs: FieldErrors = {};
   if (!username.trim()) {
     errs.username = "El nombre de usuario es obligatorio.";
-  } else if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
-    errs.username = "El nombre de usuario solo puede contener caracteres alfanuméricos.";
   }
   if (!password) {
     errs.password = "La contraseña es obligatoria.";
-  } else if (password.length < 8) {
-    errs.password = "La contraseña debe tener al menos 8 caracteres.";
-  } else if (password.length > 16) {
-    errs.password = "La contraseña no puede tener más de 16 caracteres.";
   }
   return errs;
 }
@@ -74,6 +68,7 @@ export function LoginCard() {
   const [serverError,  setServerError]  = useState("");
   /* Role detection step */
   const [detectedUser, setDetectedUser] = useState<AuthUser | null>(null);
+  const canSubmit = username.trim().length > 0 && password.length > 0;
 
   const clearFieldError = (field: keyof FieldErrors) =>
     setErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -241,7 +236,7 @@ export function LoginCard() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !canSubmit}
             className="mt-1 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-500/25 transition-colors duration-200 hover:bg-blue-700 active:bg-blue-800 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             {loading ? <><Loader2 size={15} className="animate-spin" />Verificando…</> : "Iniciar sesión"}
@@ -250,15 +245,17 @@ export function LoginCard() {
         </form>
 
         {/* Credentials hint */}
-        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Acceso</p>
-          <div className="text-[11px] text-slate-600">
-            <div className="flex items-start gap-2">
-              <LayoutDashboard size={10} className="mt-0.5 shrink-0 text-blue-500" />
-              <span>Usa el usuario y la contraseña que creaste desde la gestión de usuarios.</span>
+        {import.meta.env.DEV && (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Acceso de desarrollo</p>
+            <div className="text-[11px] text-slate-600">
+              <div className="flex items-start gap-2">
+                <LayoutDashboard size={10} className="mt-0.5 shrink-0 text-blue-500" />
+                <span>Prueba con el usuario <strong>admin</strong> y la contraseña <strong>secret</strong>.</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Footer */}

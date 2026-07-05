@@ -26,6 +26,11 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
     headers.set("Content-Type", "application/json");
   }
 
+  const sessionToken = typeof window !== "undefined" ? window.localStorage.getItem("crm_session_token") : null;
+  if (sessionToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${sessionToken}`);
+  }
+
   const response = await fetch(buildApiUrl(path), {
     ...init,
     headers,
