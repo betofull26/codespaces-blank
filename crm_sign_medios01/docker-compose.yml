@@ -1,4 +1,15 @@
 services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE=${VITE_API_BASE:-http://localhost:3000/api}
+    restart: unless-stopped
+
   postgres:
     image: postgres:15-alpine
     container_name: crm-sign-postgres
