@@ -7,6 +7,7 @@ import { databaseRouter } from '../infrastructure/http/routes/databaseRoute.js';
 import { bootstrapRouter } from '../infrastructure/http/routes/bootstrapRoute.js';
 import { userManagementRouter } from '../infrastructure/http/routes/userManagementRoute.js';
 import { backupRouter } from '../infrastructure/http/routes/backupRoute.js';
+import { contactRouter } from '../infrastructure/http/routes/contactRoute.js';
 import { agentConversationRouter } from '../infrastructure/http/routes/agentConversationRoute.js';
 
 export const createApp = () => {
@@ -21,6 +22,7 @@ export const createApp = () => {
   app.use('/api', bootstrapRouter);
   app.use('/api', userManagementRouter);
   app.use('/api', backupRouter);
+  app.use('/api', contactRouter);
   app.use('/api', agentConversationRouter);
 
   app.use((_req, res) => {

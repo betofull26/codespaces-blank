@@ -38,3 +38,9 @@ export interface AuthenticatedUser {
   userId: string;
   role: UserModel['role'];
 }
+
+export interface ContactRepository {
+  listByAgent(agentId: string): Promise<{ id: string; name: string; phone: string; createdAt: string }[]>;
+  listAllContacts(): Promise<{ id: string; name: string; phone: string; createdAt: string; agentId: string | null }[]>;
+  create(agentId: string | null, name: string, phone: string): Promise<{ id: string; agentId: string | null; name: string; phone: string; createdAt: string }>;
+}

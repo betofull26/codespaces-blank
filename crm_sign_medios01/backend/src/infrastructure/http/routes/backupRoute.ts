@@ -29,7 +29,8 @@ backupRouter.get('/backups', requireAdmin, async (_req, res) => {
 backupRouter.post('/backups', requireAdmin, async (req, res) => {
   try {
     const backupType = typeof req.body?.backupType === 'string' ? req.body.backupType : 'chats';
-    const backup = await createBackup(backupType);
+    const agentId = typeof req.body?.agentId === 'string' ? req.body.agentId : undefined;
+    const backup = await createBackup(backupType, agentId);
     res.status(201).json(buildSuccessResponse(backup, 'Respaldo creado correctamente'));
   } catch (error) {
     res.status(500).json(buildErrorResponse('No se pudo crear el respaldo', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));

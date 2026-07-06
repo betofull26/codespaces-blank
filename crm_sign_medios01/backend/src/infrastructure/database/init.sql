@@ -83,6 +83,15 @@ CREATE TABLE IF NOT EXISTS backups (
   file_url TEXT
 );
 
+CREATE TABLE IF NOT EXISTS contacts (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  CONSTRAINT fk_contacts_agent FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS user_sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,

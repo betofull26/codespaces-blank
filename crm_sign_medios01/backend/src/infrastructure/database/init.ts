@@ -15,6 +15,16 @@ BEGIN
   ) THEN
     ALTER TABLE users DROP COLUMN IF EXISTS email;
   END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'contacts'
+      AND column_name = 'agent_id'
+  ) THEN
+    ALTER TABLE contacts ALTER COLUMN agent_id DROP NOT NULL;
+  END IF;
 END $$;
 `;
 

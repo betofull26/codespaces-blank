@@ -48,7 +48,16 @@ export async function fetchAgentConversations(agentId: string): Promise<Conversa
 }
 
 export async function fetchConversationMessages(conversationId: string): Promise<ChatMessage[]> {
-  return requestApiData<ChatMessage[]>(`/conversations/${encodeURIComponent(conversationId)}/messages`);
+  const rows = await requestApiData<any[]>(`/conversations/${encodeURIComponent(conversationId)}/messages`);
+  return (rows ?? []).map((m) => ({
+    id: m.id,
+    conversationId: m.conversationId ?? m.conversation_id ?? conversationId,
+    sender: m.sender,
+    text: m.text,
+    time: m.time,
+    source: m.source ?? 'dashboard',
+    externalMessageId: m.externalMessageId ?? m.external_message_id ?? null,
+  })) as ChatMessage[];
 }
 
 export interface InterventionPayload {
@@ -65,6 +74,11 @@ export async function postConversationIntervention(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function sendMessageAsAgent(conversationId: string, text: string) {
+  const time = new Date().toISOString();
+  return postConversationIntervention(conversationId, { sender: 'supervisor_as_agent', text, time });
 }
 
 export async function updateConversationStatus(conversationId: string, status: string): Promise<Conversation> {
@@ -107,10 +121,32 @@ export async function fetchBackups(): Promise<BackupRecordDto[]> {
   return requestApiData<BackupRecordDto[]>('/backups');
 }
 
-export async function createBackup(backupType: string = 'chats'): Promise<BackupRecordDto> {
+export async function fetchContactsByAgent(agentId: string): Promise<{ id: string; name: string; phone: string; createdAt: string }[]> {
+  return requestApiData(`/agents/${encodeURIComponent(agentId)}/contacts`);
+}
+
+export async function fetchContacts(): Promise<{ id: string; agentId: string | null; name: string; phone: string; createdAt: string }[]> {
+  return requestApiData('/contacts');
+}
+
+export async function createContact(name: string, phone: string, agentId?: string) {
+  return requestApiData('/contacts', {
+    method: 'POST',
+    body: JSON.stringify({ name, phone, agentId }),
+  });
+}
+
+export async function createContactForAgent(agentId: string, name: string, phone: string) {
+  return requestApiData(`/agents/${encodeURIComponent(agentId)}/contacts`, {
+    method: 'POST',
+    body: JSON.stringify({ name, phone }),
+  });
+}
+
+export async function createBackup(backupType: string = 'chats', agentId?: string): Promise<BackupRecordDto> {
   return requestApiData<BackupRecordDto>('/backups', {
     method: 'POST',
-    body: JSON.stringify({ backupType }),
+    body: JSON.stringify({ backupType, agentId }),
   });
 }
 

@@ -16,6 +16,9 @@
     "express": "4.21.2",
     "helmet": "4.1.1",
     "pg": "8.2.0",
+    "archiver": "5.3.1",
+    "socket.io": "4.8.3",
+    "selfsigned": "1.10.11",
     "pg-native": "^3.8.0"
   },
   "devDependencies": {

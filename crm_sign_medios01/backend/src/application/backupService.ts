@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import archiver from 'archiver';
 import { getDatabaseClient } from '../infrastructure/database/connection.js';
 import { backupExportQueries } from '../infrastructure/database/backupSql.js';
 
@@ -66,22 +68,81 @@ const exportTableToCsv = async (tableName: string, query: string): Promise<strin
 const writeBackupArchive = async (fileName: string, data: Record<string, string>): Promise<string> => {
   await ensureBackupsDir();
   const filePath = path.join(backupsDir, fileName);
-  const body = Object.entries(data)
-    .map(([name, content]) => `${name}\n${content}`)
-    .join('\n\n');
 
-  await fs.writeFile(filePath, body, 'utf8');
-  return filePath;
+  const output = createWriteStream(filePath);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  return new Promise<string>((resolve, reject) => {
+    output.on('close', () => resolve(filePath));
+    output.on('end', () => resolve(filePath));
+    archive.on('warning', (err) => {
+      if (err.code === 'ENOENT') {
+        // log warning
+      } else {
+        reject(err);
+      }
+    });
+    archive.on('error', (err) => reject(err));
+
+    archive.pipe(output);
+
+    for (const [name, content] of Object.entries(data)) {
+      archive.append(content, { name });
+    }
+
+    archive.finalize();
+  });
 };
 
-export const createBackup = async (backupType: string = 'chats'): Promise<BackupRecord> => {
+export const createBackup = async (backupType: string = 'chats', agentId?: string): Promise<BackupRecord> => {
   const db = await getDatabaseClient();
   const createdAt = new Date().toISOString();
   const fileName = createBackupFileName(backupType);
 
   const exportSet: Record<string, string> = {};
-  for (const [name, config] of Object.entries(backupExportQueries)) {
-    exportSet[`${name}.csv`] = await exportTableToCsv(name, config.sql);
+  // If an agentId is provided and backupType is 'chats', only export that agent's
+  // conversations as plain text files. Otherwise, export full CSVs and include
+  // per-conversation text files as before.
+  if (agentId && backupType === 'chats') {
+    const convRows = (await db.query(
+      `SELECT id, agent_id, client_name, topic, start_time FROM conversations WHERE agent_id = $1 ORDER BY start_time`,
+      [agentId],
+    )) as Array<{ id: string; agent_id: string; client_name: string; topic: string; start_time: string }>;
+
+    for (const conv of convRows) {
+      const messages = (await db.query(
+        'SELECT sender, text, time FROM messages WHERE conversation_id = $1 ORDER BY time',
+        [conv.id],
+      )) as Array<{ sender: string; text: string; time: string }>;
+
+      const header = [`Conversation: ${conv.id}`, `Client: ${conv.client_name}`, `AgentId: ${conv.agent_id}`, `Topic: ${conv.topic}`, `Start: ${conv.start_time}`, ''];
+      const lines = messages.map((m) => `[${m.time}] ${m.sender}: ${m.text}`);
+      const content = `${header.join('\n')}\n${lines.join('\n')}\n`;
+
+      const safeClient = conv.client_name ? conv.client_name.replace(/[^a-z0-9\-_. ]+/gi, '_').trim().replace(/\s+/g, '_') : 'unknown_client';
+      const safeId = conv.id.replace(/[^a-z0-9\-_.]/gi, '_');
+      exportSet[`conversations/${safeClient}/${safeId}.txt`] = content;
+    }
+  } else {
+    for (const [name, config] of Object.entries(backupExportQueries)) {
+      exportSet[`${name}.csv`] = await exportTableToCsv(name, config.sql);
+    }
+
+    const convRows = (await db.query(`SELECT id, agent_id, client_name, topic, start_time FROM conversations ORDER BY start_time`)) as Array<{ id: string; agent_id: string; client_name: string; topic: string; start_time: string }>;
+    for (const conv of convRows) {
+      const messages = (await db.query(
+        'SELECT sender, text, time FROM messages WHERE conversation_id = $1 ORDER BY time',
+        [conv.id],
+      )) as Array<{ sender: string; text: string; time: string }>;
+
+      const header = [`Conversation: ${conv.id}`, `Client: ${conv.client_name}`, `AgentId: ${conv.agent_id}`, `Topic: ${conv.topic}`, `Start: ${conv.start_time}`, ''];
+      const lines = messages.map((m) => `[${m.time}] ${m.sender}: ${m.text}`);
+      const content = `${header.join('\n')}\n${lines.join('\n')}\n`;
+
+      const safeClient = conv.client_name ? conv.client_name.replace(/[^a-z0-9\-_. ]+/gi, '_').trim().replace(/\s+/g, '_') : 'unknown_client';
+      const safeId = conv.id.replace(/[^a-z0-9\-_.]/gi, '_');
+      exportSet[`conversations/${safeClient}/${safeId}.txt`] = content;
+    }
   }
 
   const filePath = await writeBackupArchive(fileName, exportSet);

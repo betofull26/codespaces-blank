@@ -5,7 +5,8 @@ import {
   Circle, ChevronRight,
   Send,
 } from "lucide-react";
-import { fetchAgentConversations, fetchConversationMessages, postConversationIntervention } from "../../services/dashboardApi";
+import { fetchAgentConversations, fetchConversationMessages, postConversationIntervention, sendMessageAsAgent } from "../../services/dashboardApi";
+import { io, type Socket } from 'socket.io-client';
 import type { Agent, Conversation, ChatMessage } from "./types";
 
 /* ─── Local supervisor message type ─────────────────── */
@@ -78,15 +79,27 @@ function MessageBubble({ msg, agentInitials }: { msg: AnyMessage; agentInitials:
         ].join(" ")}>
           {msg.text}
         </div>
-        <div className={['mt-1 flex items-center gap-2 text-[10px] text-slate-400',
-          isAgent ? "justify-end" : "justify-start",
-        ].join(" ")}>
+        <div className={['mt-1 flex items-center gap-2 text-[10px] text-slate-400', isAgent ? "justify-end" : "justify-start"].join(" ")}>
           <span className="flex items-center gap-1">
             <Clock size={9} />{msg.time}
           </span>
           {msg.source === "whatsapp" && (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
               WhatsApp
+            </span>
+          )}
+
+          {/* Optimistic sending indicator */}
+          {typeof (msg as any).id === 'string' && (msg as any).id.startsWith('opt-') && (
+            <span className="ml-2 flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <Loader2 size={11} className="animate-spin" /> Enviando
+            </span>
+          )}
+
+          {/* Persisted outbound indicator */}
+          {msg.externalMessageId && (
+            <span className="ml-2 flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              <CheckCircle2 size={11} /> Enviado
             </span>
           )}
         </div>
@@ -100,7 +113,7 @@ type InterventionMode = "supervisor" | "supervisor_as_agent";
 
 function InterventionBar({ onSend }: { onSend: (text: string, mode: InterventionMode) => void }) {
   const [text, setText] = useState("");
-  const [mode] = useState<InterventionMode>("supervisor");
+  const [mode, setMode] = useState<InterventionMode>("supervisor");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = () => {
@@ -114,6 +127,10 @@ function InterventionBar({ onSend }: { onSend: (text: string, mode: Intervention
     <div className="border-t px-4 py-3 transition-colors border-indigo-200 bg-indigo-50">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-[11px] text-slate-500">Enviar mensaje al cliente</span>
+        <label className="ml-3 flex items-center gap-2 text-xs text-slate-500">
+          <input type="checkbox" className="h-4 w-4" checked={mode === 'supervisor_as_agent'} onChange={(e) => setMode(e.target.checked ? 'supervisor_as_agent' : 'supervisor')} />
+          <span>Enviar como agente</span>
+        </label>
       </div>
 
       <div className="flex items-end gap-2">
@@ -191,6 +208,25 @@ export function AgentChatTree({ agent, open, onClose }: AgentChatTreeProps) {
   const [supervisorMsgs, setSupervisorMsgs] = useState<Record<string, SupervisorMsg[]>>({});
 
   useEffect(() => {
+    let socket: Socket | null = null;
+    try {
+      socket = io();
+      socket.on('message.created', (payload: any) => {
+        const convId = payload?.conversationId;
+        const msg = payload?.message;
+        if (!convId || !msg) return;
+        setMessagesByConversation((prev) => ({ ...prev, [convId]: [...(prev[convId] ?? []), msg] }));
+        setConversations((prev) => prev.map((c) => (c.id === convId ? { ...c, messages: [...(c.messages ?? []), msg] } : c)));
+      });
+    } catch (e) {
+      console.error('Realtime client init failed', e);
+    }
+
+    return () => {
+      try { socket?.disconnect(); } catch (e) {}
+    };
+  }, []);
+
     let active = true;
     const loadConversations = async () => {
       setIsLoadingConversations(true);
@@ -272,15 +308,65 @@ export function AgentChatTree({ agent, open, onClose }: AgentChatTreeProps) {
       text,
       time,
     };
-
     setSupervisorMsgs((prev) => ({ ...prev, [selectedConvId]: [...(prev[selectedConvId] ?? []), msg] }));
     setInterventionError(null);
 
+    // If sending as agent, optimistically append an outbound message to the conversation
+    let optimisticId: string | null = null;
+    if (mode === 'supervisor_as_agent') {
+      optimisticId = `opt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const optimisticMsg = {
+        id: optimisticId,
+        conversationId: selectedConvId,
+        sender: 'agent',
+        text,
+        time,
+        source: 'whatsapp',
+        externalMessageId: null,
+      } as any;
+
+      setMessagesByConversation((prev) => ({ ...prev, [selectedConvId]: [...(prev[selectedConvId] ?? []), optimisticMsg] }));
+      setConversations((prev) => prev.map((conv) => (conv.id === selectedConvId ? { ...conv, messages: [...(conv.messages ?? []), optimisticMsg] } : conv)));
+    }
+
     try {
-      await postConversationIntervention(selectedConvId, { sender: mode, text, time });
+      let resp: any = null;
+
+      if (mode === 'supervisor_as_agent') {
+        resp = await sendMessageAsAgent(selectedConvId, text);
+      } else {
+        resp = await postConversationIntervention(selectedConvId, { sender: mode, text, time });
+      }
+
+      // If backend returned an outboundMessage, append it; otherwise refresh persisted messages
+      if (resp && resp.outboundMessage) {
+        const out = resp.outboundMessage;
+        // remove optimistic if present
+        if (optimisticId) {
+          setMessagesByConversation((prev) => ({ ...prev, [selectedConvId]: (prev[selectedConvId] ?? []).filter((m: any) => m.id !== optimisticId) }));
+          setConversations((prev) => prev.map((conv) => (conv.id === selectedConvId ? { ...conv, messages: (conv.messages ?? []).filter((m: any) => m.id !== optimisticId) } : conv)));
+        }
+
+        setMessagesByConversation((prev) => ({ ...prev, [selectedConvId]: [...(prev[selectedConvId] ?? []), out] }));
+        setConversations((prev) => prev.map((conv) => (conv.id === selectedConvId ? { ...conv, messages: [...(conv.messages ?? []), out] } : conv)));
+      } else {
+        try {
+          const updated = await fetchConversationMessages(selectedConvId);
+          setMessagesByConversation((prev) => ({ ...prev, [selectedConvId]: updated }));
+          setConversations((prev) => prev.map((conv) => (conv.id === selectedConvId ? { ...conv, messages: updated } : conv)));
+        } catch (fetchErr) {
+          console.error('Error refreshing messages after send:', fetchErr instanceof Error ? fetchErr.message : fetchErr);
+        }
+      }
     } catch (error) {
       console.error("Error posting intervention:", error);
       setInterventionError(error instanceof Error ? error.message : "No se pudo enviar la intervención");
+
+      // remove optimistic message on failure
+      if (optimisticId) {
+        setMessagesByConversation((prev) => ({ ...prev, [selectedConvId]: (prev[selectedConvId] ?? []).filter((m: any) => m.id !== optimisticId) }));
+        setConversations((prev) => prev.map((conv) => (conv.id === selectedConvId ? { ...conv, messages: (conv.messages ?? []).filter((m: any) => m.id !== optimisticId) } : conv)));
+      }
     }
   };
 

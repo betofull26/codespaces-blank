@@ -288,7 +288,7 @@ export function SettingsPage() {
   const backupChatsZip = async () => {
     setChatsStatus("running");
     try {
-      const backup = await createBackup("chats");
+      const backup = await createBackup("chats", selectedAgentId);
       const blob = await downloadBackup(backup.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");

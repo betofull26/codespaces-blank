@@ -34,7 +34,7 @@ export class PostgresConversationRepository implements ConversationRepository {
 
   async getById(id: string): Promise<ConversationModel | null> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, agent_id AS "agentId", client_name AS "clientName", topic, status, start_time AS "startTime" FROM conversations WHERE id = $1', [id]);
+    const rows = await db.query('SELECT id, agent_id AS "agentId", client_name AS "clientName", topic, status, start_time AS "startTime", phone FROM conversations WHERE id = $1', [id]);
     return (rows[0] as ConversationModel | undefined) ?? null;
   }
 
@@ -168,5 +168,27 @@ export class PostgresUserRepository implements UserRepository {
       'UPDATE user_sessions SET revoked_at = $1, updated_at = $1 WHERE token_hash = $2',
       [new Date().toISOString(), tokenHash],
     );
+  }
+}
+
+export class PostgresContactRepository implements ContactRepository {
+  async listByAgent(agentId: string): Promise<{ id: string; name: string; phone: string; createdAt: string }[]> {
+    const db = await getDatabaseClient();
+    const rows = await db.query('SELECT id, name, phone, created_at AS "createdAt" FROM contacts WHERE agent_id = $1 ORDER BY created_at DESC', [agentId]);
+    return rows as { id: string; name: string; phone: string; createdAt: string }[];
+  }
+
+  async listAllContacts(): Promise<{ id: string; name: string; phone: string; createdAt: string; agentId: string | null }[]> {
+    const db = await getDatabaseClient();
+    const rows = await db.query('SELECT id, agent_id AS "agentId", name, phone, created_at AS "createdAt" FROM contacts ORDER BY created_at DESC');
+    return rows as { id: string; name: string; phone: string; createdAt: string; agentId: string | null }[];
+  }
+
+  async create(agentId: string | null, name: string, phone: string): Promise<{ id: string; agentId: string | null; name: string; phone: string; createdAt: string }> {
+    const db = await getDatabaseClient();
+    const id = `contact-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+    const createdAt = new Date().toISOString();
+    await db.query('INSERT INTO contacts (id, agent_id, name, phone, created_at) VALUES ($1, $2, $3, $4, $5)', [id, agentId, name, phone, createdAt]);
+    return { id, agentId, name, phone, createdAt };
   }
 }

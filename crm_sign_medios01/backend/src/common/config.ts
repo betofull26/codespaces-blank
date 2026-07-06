@@ -29,4 +29,5 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET ?? 'dev-secret',
   whatsappToken: process.env.WHATSAPP_TOKEN ?? 'dev-whatsapp-token',
   whatsappApiUrl: process.env.WHATSAPP_API_URL ?? 'http://localhost:3001',
+  metaVerifyToken: process.env.META_VERIFY_TOKEN ?? 'dev-verify-token',
 };
