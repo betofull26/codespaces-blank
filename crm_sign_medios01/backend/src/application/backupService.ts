@@ -75,14 +75,14 @@ const writeBackupArchive = async (fileName: string, data: Record<string, string>
   return new Promise<string>((resolve, reject) => {
     output.on('close', () => resolve(filePath));
     output.on('end', () => resolve(filePath));
-    archive.on('warning', (err) => {
-      if (err.code === 'ENOENT') {
+    archive.on('warning', (err: Error & { code?: string }) => {
+      if ((err as any).code === 'ENOENT') {
         // log warning
       } else {
         reject(err);
       }
     });
-    archive.on('error', (err) => reject(err));
+    archive.on('error', (err: Error) => reject(err));
 
     archive.pipe(output);
 

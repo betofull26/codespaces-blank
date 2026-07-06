@@ -1,5 +1,5 @@
 import type { AgentModel, ConversationModel, MessageModel, UserModel, AuditLogModel, SessionModel } from '../../domain/models.js';
-import type { AgentRepository, ConversationRepository, MessageRepository, UserRepository } from '../../domain/repositories.js';
+import type { AgentRepository, ConversationRepository, MessageRepository, UserRepository, ContactRepository } from '../../domain/repositories.js';
 import { getDatabaseClient } from './connection.js';
 
 export class PostgresAgentRepository implements AgentRepository {

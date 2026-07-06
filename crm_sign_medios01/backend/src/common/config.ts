@@ -22,12 +22,19 @@ dotenv.config({ path: envFile });
 
 dotenv.config();
 
+const rawWhatsAppApiUrl = process.env.WHATSAPP_API_URL ?? '';
+const whatsappApiUrl = rawWhatsAppApiUrl.replace(/\/+$|\/messages$/i, '');
+const whatsappSendUrl = whatsappApiUrl ? `${whatsappApiUrl}/messages` : '';
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   nodeEnv: process.env.NODE_ENV ?? 'development',
   databaseUrl: process.env.DATABASE_URL ?? '',
   jwtSecret: process.env.JWT_SECRET ?? 'dev-secret',
   whatsappToken: process.env.WHATSAPP_TOKEN ?? 'dev-whatsapp-token',
-  whatsappApiUrl: process.env.WHATSAPP_API_URL ?? '',  // Configura URL real de Meta API en .env
+  whatsappApiUrl,
+  whatsappSendUrl,
   metaVerifyToken: process.env.META_VERIFY_TOKEN ?? 'dev-verify-token',
+  metaAppSecret: process.env.META_APP_SECRET ?? '',
+  defaultPhoneCountryCode: process.env.DEFAULT_PHONE_COUNTRY_CODE ?? '54',
 };

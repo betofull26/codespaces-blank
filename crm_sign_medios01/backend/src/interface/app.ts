@@ -15,7 +15,16 @@ export const createApp = () => {
 
   app.use(helmet());
   app.use(cors());
-  app.use(express.json());
+  // capture raw body for webhook signature verification
+  app.use(express.json({
+    verify: (req, _res, buf) => {
+      try {
+        (req as any).rawBody = buf;
+      } catch (e) {
+        // ignore in case of non-object request
+      }
+    },
+  }));
 
   app.use('/api', healthRouter);
   app.use('/api', databaseRouter);

@@ -1,11 +1,15 @@
 import { Router } from 'express';
 import { createMessage, ingestWhatsAppMessage, listAgents, getConversationsByAgentId, listMessagesByConversationId, listConversations } from '../../../application/useCases.js';
-import { config } from '../../../common/config.js';
 import { buildErrorResponse, buildSuccessResponse } from '../../../common/apiResponse.js';
 import { authenticateRequest } from '../middleware/authMiddleware.js';
 import { requireHttps } from '../middleware/requireHttps.js';
 import { PostgresAgentRepository, PostgresConversationRepository, PostgresMessageRepository } from '../../../infrastructure/database/repositories.js';
 import { getIo } from '../../../infrastructure/realtime/socket.js';
+import { parseMetaWebhook } from '../adapters/whatsappAdapter.js';
+import { sanitizeInbound, sanitizeSendPayload } from '../validators/whatsappValidator.js';
+import { verifyWebhookSignature } from '../middleware/verifyWebhookSignature.js';
+import { sendTextMessage, getMetrics as getWhatsAppMetrics } from '../../whatsapp/whatsappClient.js';
+import { verifyMetaWebhook } from '../controllers/whatsappWebhookController.js';
 
 export const agentConversationRouter = Router();
 
@@ -49,12 +53,28 @@ agentConversationRouter.get('/conversations/:id/messages', async (req, res) => {
   }
 });
 
-agentConversationRouter.post('/whatsapp/inbound', requireHttps, async (req, res) => {
+agentConversationRouter.get('/whatsapp/metrics', async (_req, res) => {
   try {
-    const payload = req.body ?? {};
+    const m = getWhatsAppMetrics();
+    res.json(buildSuccessResponse(m, 'WhatsApp metrics'));
+  } catch (e) {
+    res.status(500).json(buildErrorResponse('Could not get metrics', e instanceof Error ? e.message : 'UNKNOWN_ERROR'));
+  }
+});
+
+agentConversationRouter.post('/whatsapp/inbound', requireHttps, verifyWebhookSignature, async (req, res) => {
+  try {
+    const raw = req.body ?? {};
+    const parsed = parseMetaWebhook(raw) ?? raw;
+    const sanitized = sanitizeInbound(parsed);
+    if (!sanitized.ok) {
+      return res.status(400).json(sanitized.error);
+    }
+    const payload = sanitized.value;
+
     const conversationRepository = new PostgresConversationRepository();
     const messageRepository = new PostgresMessageRepository();
-    const result = await ingestWhatsAppMessage(conversationRepository, messageRepository, payload);
+    const result = await ingestWhatsAppMessage(conversationRepository, messageRepository, payload as any);
 
     // emit realtime event
     try {
@@ -73,26 +93,24 @@ agentConversationRouter.post('/whatsapp/inbound', requireHttps, async (req, res)
   }
 });
 
-// Meta verification endpoint for webhook subscription
-agentConversationRouter.get('/whatsapp/webhook', async (req, res) => {
-  const mode = Array.isArray(req.query['hub.mode']) ? req.query['hub.mode'][0] : req.query['hub.mode'];
-  const token = Array.isArray(req.query['hub.verify_token']) ? req.query['hub.verify_token'][0] : req.query['hub.verify_token'];
-  const challenge = Array.isArray(req.query['hub.challenge']) ? req.query['hub.challenge'][0] : req.query['hub.challenge'];
-
-  if (mode === 'subscribe' && token === config.metaVerifyToken) {
-    return res.status(200).send(challenge ?? '');
-  }
-
-  return res.status(403).json(buildErrorResponse('Verification failed', 'VERIFICATION_FAILED'));
-});
+// Meta verification endpoint for webhook subscription. This route must not use
+// signature verification middleware because Meta's initial GET does not send a signature.
+agentConversationRouter.get('/whatsapp/webhook', verifyMetaWebhook);
 
 // Backwards-compatible webhook path used by frontend tests/tools
-agentConversationRouter.post('/whatsapp/webhook', requireHttps, async (req, res) => {
+agentConversationRouter.post('/whatsapp/webhook', requireHttps, verifyWebhookSignature, async (req, res) => {
   try {
-    const payload = req.body ?? {};
+    const raw = req.body ?? {};
+    const parsed = parseMetaWebhook(raw) ?? raw;
+    const sanitized = sanitizeInbound(parsed);
+    if (!sanitized.ok) {
+      return res.status(400).json(sanitized.error);
+    }
+    const payload = sanitized.value;
+
     const conversationRepository = new PostgresConversationRepository();
     const messageRepository = new PostgresMessageRepository();
-    const result = await ingestWhatsAppMessage(conversationRepository, messageRepository, payload);
+    const result = await ingestWhatsAppMessage(conversationRepository, messageRepository, payload as any);
 
     try {
       const io = getIo();
@@ -134,48 +152,12 @@ agentConversationRouter.post('/conversations/:id/interventions', async (req, res
         const phone = conv?.phone ?? '';
 
         if (phone) {
-          const waUrl = `${config.whatsappApiUrl.replace(/\/$/, '')}/messages`;
-          const maxRetries = Number(process.env.WHATSAPP_SEND_RETRIES ?? 3);
-          const baseDelay = Number(process.env.WHATSAPP_SEND_BACKOFF_MS ?? 500);
-          let waResp: Response | null = null;
+          // delegate send to whatsapp client which handles rate limiting, retries and metrics
+          const sendResult = await sendTextMessage(phone, text);
+          const externalMessageId = sendResult.externalMessageId ?? null;
 
-          for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            console.log(`WhatsApp send attempt ${attempt} to ${phone}`);
-            try {
-              waResp = await fetch(waUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${config.whatsappToken}`,
-                },
-                body: JSON.stringify({ to: phone, text }),
-              });
-
-              if (waResp.ok) {
-                console.log(`WhatsApp send succeeded on attempt ${attempt} for ${phone}`);
-                break;
-              }
-
-              const tb = await waResp.text().catch(() => '<no-body>');
-              console.error(`WhatsApp send attempt ${attempt} failed: ${waResp.status} ${tb}`);
-            } catch (err) {
-              console.error(`WhatsApp send attempt ${attempt} error:`, err instanceof Error ? err.message : err);
-            }
-
-            if (attempt < maxRetries) {
-              const delay = baseDelay * Math.pow(2, attempt - 1);
-              await new Promise((r) => setTimeout(r, delay));
-            }
-          }
-
-          let externalMessageId: string | null = null;
-          if (waResp && waResp.ok) {
-            try {
-              const body = await waResp.json();
-              externalMessageId = body?.messageId ?? body?.id ?? null;
-            } catch (e) {
-              console.error('Failed to parse WhatsApp response body:', e instanceof Error ? e.message : e);
-            }
+          if (!sendResult.ok) {
+            console.error('Failed to send WhatsApp message', { status: sendResult.status, body: sendResult.bodyText });
           }
 
           // Persist outbound message as agent/whatsapp
@@ -215,11 +197,17 @@ agentConversationRouter.post('/whatsapp/send', async (req, res) => {
   try {
     await authenticateRequest(req as any, res, async () => {
       const payload = req.body ?? {};
+      // sanitize send payload
+      const sanitized = sanitizeSendPayload(payload);
+      if (!sanitized.ok) {
+        return res.status(400).json(sanitized.error);
+      }
+
       const conversationId = typeof payload.conversationId === 'string' && payload.conversationId.trim() ? payload.conversationId.trim() : null;
       const phone = typeof payload.phone === 'string' && payload.phone.trim() ? payload.phone.trim() : null;
-      const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+      const sendText = sanitized.text;
 
-      if (!text || (!conversationId && !phone)) {
+      if (!sendText || (!conversationId && !sanitized.phone)) {
         return res.status(400).json(buildErrorResponse('Invalid payload', 'INVALID_PAYLOAD'));
       }
 
@@ -238,7 +226,7 @@ agentConversationRouter.post('/whatsapp/send', async (req, res) => {
           id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           agentId,
           clientName: 'Cliente',
-          topic: text.length > 0 ? text.slice(0, 48) : 'Mensaje saliente',
+          topic: sendText.length > 0 ? sendText.slice(0, 48) : 'Mensaje saliente',
           status: 'active',
           startTime: new Date().toISOString(),
           phone: phone ?? null,
@@ -246,49 +234,11 @@ agentConversationRouter.post('/whatsapp/send', async (req, res) => {
         conv = await convRepo.create(newConv as any);
       }
 
-      // send to external WhatsApp API with retries
-      const waUrl = `${config.whatsappApiUrl.replace(/\/$/, '')}/messages`;
-      const maxRetries = Number(process.env.WHATSAPP_SEND_RETRIES ?? 3);
-      const baseDelay = Number(process.env.WHATSAPP_SEND_BACKOFF_MS ?? 500);
-      let waResp: Response | null = null;
-
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        console.log(`POST /whatsapp/send attempt ${attempt} -> ${waUrl}`);
-        try {
-          waResp = await fetch(waUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${config.whatsappToken}`,
-            },
-            body: JSON.stringify({ to: conv.phone ?? phone, text }),
-          });
-
-          if (waResp.ok) {
-            console.log('WhatsApp send succeeded');
-            break;
-          }
-
-          const tb = await waResp.text().catch(() => '<no-body>');
-          console.error(`WhatsApp send failed: ${waResp.status} ${tb}`);
-        } catch (err) {
-          console.error('WhatsApp send error:', err instanceof Error ? err.message : err);
-        }
-
-        if (attempt < maxRetries) {
-          const delay = baseDelay * Math.pow(2, attempt - 1);
-          await new Promise((r) => setTimeout(r, delay));
-        }
-      }
-
-      let externalMessageId: string | null = null;
-      if (waResp && waResp.ok) {
-        try {
-          const body = await waResp.json();
-          externalMessageId = body?.messageId ?? body?.id ?? null;
-        } catch (e) {
-          console.error('Failed to parse WhatsApp send response:', e instanceof Error ? e.message : e);
-        }
+      // delegate send to whatsapp client which handles rate limiting, retries and metrics
+      const sendResult = await sendTextMessage(sanitized.phone ?? conv.phone ?? phone, sendText);
+      const externalMessageId = sendResult.externalMessageId ?? null;
+      if (!sendResult.ok) {
+        console.error('Failed to send WhatsApp message via /whatsapp/send', { status: sendResult.status, body: sendResult.bodyText });
       }
 
       const msgRepo = new PostgresMessageRepository();
@@ -296,7 +246,7 @@ agentConversationRouter.post('/whatsapp/send', async (req, res) => {
         id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         conversationId: conv.id,
         sender: 'agent',
-        text,
+        text: sendText,
         time: new Date().toISOString(),
         source: 'whatsapp',
         externalMessageId,

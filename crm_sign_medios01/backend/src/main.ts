@@ -53,8 +53,9 @@ const startServer = async () => {
     console.error('Failed to init realtime:', e);
   }
 
-  server.listen(config.port, () => {
-    console.log(`Backend running on port ${config.port} (tls=${useTls})`);
+  const host = process.env.HOST ?? '0.0.0.0';
+  server.listen(config.port, host, () => {
+    console.log(`Backend running on host ${host} port ${config.port} (tls=${useTls})`);
   });
 };
 
