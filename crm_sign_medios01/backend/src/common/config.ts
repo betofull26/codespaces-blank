@@ -28,6 +28,6 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL ?? '',
   jwtSecret: process.env.JWT_SECRET ?? 'dev-secret',
   whatsappToken: process.env.WHATSAPP_TOKEN ?? 'dev-whatsapp-token',
-  whatsappApiUrl: process.env.WHATSAPP_API_URL ?? 'http://localhost:3001',
+  whatsappApiUrl: process.env.WHATSAPP_API_URL ?? '',  // Configura URL real de Meta API en .env
   metaVerifyToken: process.env.META_VERIFY_TOKEN ?? 'dev-verify-token',
 };

@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Users, UserCheck, Search, MessageSquare, Send, Loader2, Phone, Clock } from "lucide-react";
+import { Search, Send, Loader2, Phone, Clock } from "lucide-react";
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
-import { KPICards } from "../components/dashboard/KPICards";
 import { fetchConversationMessages, fetchConversations, postConversationIntervention } from "../services/dashboardApi";
 import type { ChatMessage, Conversation } from "../components/dashboard/types";
 
@@ -43,7 +42,6 @@ export function DashboardPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | Conversation["status"]>("all");
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, ChatMessage[]>>({});
@@ -91,15 +89,10 @@ export function DashboardPage() {
   }, [selectedConversationId]);
 
   const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId) ?? null;
-  const activeConversations = conversations.filter((conversation) => conversation.status === "active").length;
-  const waitingConversations = conversations.filter((conversation) => conversation.status === "waiting").length;
-  const closedConversations = conversations.filter((conversation) => conversation.status === "closed").length;
 
   const filteredConversations = conversations.filter((conversation) => {
     const searchText = `${conversation.clientName} ${conversation.topic}`.toLowerCase();
-    const matchesSearch = searchText.includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || conversation.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return searchText.includes(searchQuery.toLowerCase());
   });
 
   const selectedMessages = selectedConversationId ? messagesByConversation[selectedConversationId] ?? [] : [];
@@ -150,15 +143,6 @@ export function DashboardPage() {
         <DashboardHeader />
 
         <main className="flex-1 overflow-y-auto px-6 py-5">
-          <KPICards
-            cards={[
-              { icon: <Users size={20} />, label: "Conversaciones Totales", value: conversations.length, color: "blue" },
-              { icon: <UserCheck size={20} />, label: "Activas", value: activeConversations, color: "emerald" },
-              { icon: <MessageSquare size={20} />, label: "En espera", value: waitingConversations, color: "amber" },
-              { icon: <Users size={20} />, label: "Cerradas", value: closedConversations, color: "slate" },
-            ]}
-          />
-
           {conversationsError && (
             <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               Error al cargar conversaciones: {conversationsError}
@@ -186,20 +170,6 @@ export function DashboardPage() {
                   className="h-8 rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
                 />
               </div>
-              {(["all", "active", "waiting", "closed"] as const).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setStatusFilter(filter)}
-                  className={[
-                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                    statusFilter === filter
-                      ? "bg-blue-600 text-white"
-                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  {filter === "all" ? "Todas" : filter === "active" ? "Activas" : filter === "waiting" ? "En espera" : "Cerradas"}
-                </button>
-              ))}
             </div>
           </div>
 
