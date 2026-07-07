@@ -17,6 +17,17 @@ const requireAdmin = async (req: any, res: any, next: any) => {
   });
 };
 
+const requireAdminForMutations = async (req: any, res: any, next: any) => {
+  await authenticateRequest(req, res, async () => {
+    try {
+      ensureAuthorized(req.user?.role, 'manage-backups');
+      next();
+    } catch {
+      return res.status(403).json(buildErrorResponse('Solo los administradores pueden gestionar respaldos', 'FORBIDDEN'));
+    }
+  });
+};
+
 backupRouter.get('/backups', requireAdmin, async (_req, res) => {
   try {
     const backups = await listBackups();
@@ -26,7 +37,7 @@ backupRouter.get('/backups', requireAdmin, async (_req, res) => {
   }
 });
 
-backupRouter.post('/backups', requireAdmin, async (req, res) => {
+backupRouter.post('/backups', requireAdminForMutations, async (req, res) => {
   try {
     const backupType = typeof req.body?.backupType === 'string' ? req.body.backupType : 'chats';
     const agentId = typeof req.body?.agentId === 'string' ? req.body.agentId : undefined;
@@ -37,7 +48,7 @@ backupRouter.post('/backups', requireAdmin, async (req, res) => {
   }
 });
 
-backupRouter.get('/backups/download/:id', requireAdmin, async (req, res) => {
+backupRouter.get('/backups/download/:id', requireAdminForMutations, async (req, res) => {
   try {
     const download = await downloadBackupFile(req.params.id);
     if (!download) {

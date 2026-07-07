@@ -33,27 +33,38 @@ export async function logoutFromBackend(): Promise<void> {
 
 export async function loginWithBackend(username: string, password: string): Promise<LoginResult> {
   try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('crm_session_token');
+    }
+
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
 
-    if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok || !payload?.success) {
       return { ok: false, error: 'invalid_credentials' };
     }
 
-    const payload = await response.json();
     const data = payload?.data;
     const user = data?.user;
     const sessionToken = data?.sessionToken;
 
-    if (sessionToken) {
-      window.localStorage.setItem('crm_session_token', sessionToken);
+    if (!user || !sessionToken) {
+      return { ok: false, error: 'invalid_credentials' };
     }
 
-    if (!user) {
+    const normalizedRole = user.role === 'admin' ? 'admin' : user.role === 'supervisor' ? 'supervisor' : 'agent';
+
+    if (normalizedRole === 'agent') {
       return { ok: false, error: 'invalid_credentials' };
+    }
+
+    if (sessionToken) {
+      window.localStorage.setItem('crm_session_token', sessionToken);
     }
 
     return {
@@ -63,8 +74,8 @@ export async function loginWithBackend(username: string, password: string): Prom
         name: user.fullName ?? user.username,
         initials: (user.fullName ?? user.username).split(' ').map((part: string) => part[0]).join('').slice(0, 2).toUpperCase(),
         username: user.username,
-        role: user.role === 'admin' ? 'admin' : user.role === 'supervisor' ? 'supervisor' : 'agent',
-        title: user.role === 'admin' ? 'Administrador del sistema' : user.role === 'supervisor' ? 'Supervisor' : 'Agente',
+        role: normalizedRole,
+        title: normalizedRole === 'admin' ? 'Administrador del sistema' : 'Supervisor',
       },
     };
   } catch {
@@ -73,10 +84,7 @@ export async function loginWithBackend(username: string, password: string): Prom
 }
 
 export function homeRouteFor(role: UserRole): string {
-  if (role === "agent") {
-    return "/agent-home";
-  }
-  return "/dashboard";
+  return role === "admin" || role === "supervisor" ? "/dashboard" : "/";
 }
 
 const STORAGE_KEY = "crm-signmedios-current-user";
@@ -103,6 +111,31 @@ export function saveCurrentUser(user: AuthUser, rememberMe: boolean) {
 
 export function getCurrentUser(): AuthUser | null {
   return parseStoredUser(sessionStorage.getItem(STORAGE_KEY)) ?? parseStoredUser(localStorage.getItem(STORAGE_KEY));
+}
+
+export function getCurrentUserRole(): UserRole | null {
+  const currentUser = getCurrentUser();
+  if (currentUser?.role) {
+    return currentUser.role;
+  }
+
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const token = window.localStorage.getItem("crm_session_token");
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const [, payload] = token.split(".");
+    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    const role = decoded.role;
+    return role === "admin" || role === "supervisor" || role === "agent" ? role : null;
+  } catch {
+    return null;
+  }
 }
 
 export function hasActiveSession(): boolean {

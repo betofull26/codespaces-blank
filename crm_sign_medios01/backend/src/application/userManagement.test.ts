@@ -43,6 +43,48 @@ test('createUser preserves the user data when accessToPanel is true', async () =
   assert.equal(result.username, 'ana.silva');
 });
 
+test('createUser writes an audit record for new user creation', async () => {
+  let auditEntry: { action: string; entityId: string; performedBy: string } | null = null;
+
+  const repository: UserRepository = {
+    listUsers: async () => [],
+    getUserById: async () => null,
+    getUserByUsername: async () => null,
+    createUser: async (user) => user,
+    updateUser: async (user) => user,
+    deleteUser: async () => undefined,
+    updateUserRole: async (_id, _role, _actorId) => null,
+    updateUserStatus: async (_id, _status) => null,
+    createAuditLog: async (entry) => {
+      auditEntry = {
+        action: entry.action,
+        entityId: entry.entityId,
+        performedBy: entry.performedBy,
+      };
+    },
+    createSession: async () => undefined,
+    getSessionByTokenHash: async () => null,
+    revokeSession: async () => undefined,
+  };
+
+  await createUser(repository, {
+    id: 'user-create-audit',
+    fullName: 'Ana Silva',
+    username: 'ana.silva.audit',
+    passwordHash: 'hash-create',
+    role: 'supervisor',
+    status: 'active',
+    accessToPanel: true,
+    createdAt: '2026-07-03T00:00:00.000Z',
+    updatedAt: '2026-07-03T00:00:00.000Z',
+  } as UserModel, 'admin');
+
+  assert.ok(auditEntry);
+  assert.equal(auditEntry?.action, 'create_user');
+  assert.equal(auditEntry?.entityId, 'user-create-audit');
+  assert.equal(auditEntry?.performedBy, 'admin');
+});
+
 test('loginUser accepts legacy plain-text passwords for stored users', async () => {
   const repository: UserRepository = {
     listUsers: async () => [],

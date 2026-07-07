@@ -9,6 +9,7 @@ import { userManagementRouter } from '../infrastructure/http/routes/userManageme
 import { backupRouter } from '../infrastructure/http/routes/backupRoute.js';
 import { contactRouter } from '../infrastructure/http/routes/contactRoute.js';
 import { agentConversationRouter } from '../infrastructure/http/routes/agentConversationRoute.js';
+import { auditRouter } from '../infrastructure/http/routes/auditRoute.js';
 
 export const createApp = () => {
   const app = express();
@@ -35,6 +36,7 @@ export const createApp = () => {
   app.use('/api', backupRouter);
   app.use('/api', contactRouter);
   app.use('/api', agentConversationRouter);
+  app.use('/api', auditRouter);
 
   app.use((_req, res) => {
     res.status(404).json(buildErrorResponse('Ruta no encontrada', 'NOT_FOUND'));

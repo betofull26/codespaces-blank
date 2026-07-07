@@ -78,6 +78,22 @@ export const createUser = async (
 
   const created = await repository.createUser(userToCreate);
 
+  const auditEntry = createAuditEntry('user', created.id, 'create_user', actorId, {
+    username: created.username,
+    role: created.role,
+    accessToPanel: created.accessToPanel,
+  });
+
+  await repository.createAuditLog({
+    id: auditEntry.id,
+    entityType: auditEntry.entityType,
+    entityId: auditEntry.entityId,
+    action: auditEntry.action,
+    performedBy: auditEntry.performedBy,
+    details: auditEntry.details,
+    createdAt: auditEntry.createdAt,
+  });
+
   return created;
 };
 

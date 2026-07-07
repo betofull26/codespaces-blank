@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PostgresContactRepository } from '../../database/repositories.js';
 import { buildSuccessResponse, buildErrorResponse } from '../../../common/apiResponse.js';
 import { authenticateRequest } from '../middleware/authMiddleware.js';
+import { ensureAuthorized } from '../../../application/authorization.js';
 
 export const contactRouter = Router();
 
@@ -23,6 +24,11 @@ contactRouter.get('/agents/:agentId/contacts', async (req, res) => {
 contactRouter.post('/agents/:agentId/contacts', async (req, res) => {
   try {
     await authenticateRequest(req as any, res, async () => {
+      const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
+      if (role === 'agent') {
+        return res.status(403).json(buildErrorResponse('No tienes permisos para crear contactos', 'FORBIDDEN'));
+      }
+
       const agentId = Array.isArray(req.params.agentId) ? req.params.agentId[0] : req.params.agentId;
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
@@ -43,7 +49,12 @@ contactRouter.post('/agents/:agentId/contacts', async (req, res) => {
 contactRouter.post('/contacts', async (req, res) => {
   try {
     await authenticateRequest(req as any, res, async () => {
-          const rawAgentId = typeof req.body?.agentId === 'string' ? req.body.agentId.trim() : '';
+      const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
+      if (role === 'agent') {
+        return res.status(403).json(buildErrorResponse('No tienes permisos para crear contactos', 'FORBIDDEN'));
+      }
+
+      const rawAgentId = typeof req.body?.agentId === 'string' ? req.body.agentId.trim() : '';
       const agentId = rawAgentId || null;
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';

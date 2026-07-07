@@ -33,6 +33,60 @@ function timestamp() {
   return new Date().toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function formatActivityMessage(item: AuditLogDto): string {
+  const actionLabels: Record<string, string> = {
+    create_user: "creó un usuario",
+    update_user: "actualizó un usuario",
+    delete_user: "eliminó un usuario",
+    change_role: "cambió el rol",
+    change_status: "cambió el estado",
+    login: "inició sesión",
+  };
+
+  const actionLabel = actionLabels[item.action] ?? item.action.replace(/_/g, " ");
+
+  try {
+    const details = JSON.parse(item.details);
+
+    switch (item.action) {
+      case "create_user": {
+        const username = typeof details?.username === "string" ? details.username : "un usuario";
+        const role = typeof details?.role === "string" ? details.role : "";
+        const accessToPanel = details?.accessToPanel === true;
+        const roleText = role ? ` con rol ${role}` : "";
+        const accessText = accessToPanel ? " y acceso al panel habilitado" : " y acceso al panel deshabilitado";
+        return `El usuario ${username}${roleText}${accessText}.`;
+      }
+      case "update_user": {
+        const previousUsername = typeof details?.previousUsername === "string" ? details.previousUsername : "el usuario";
+        const newUsername = typeof details?.newUsername === "string" ? details.newUsername : "el usuario";
+        return `Actualizó la información de ${previousUsername} y la dejó como ${newUsername}.`;
+      }
+      case "delete_user": {
+        const deletedUser = typeof details?.deletedUser === "string" ? details.deletedUser : "un usuario";
+        return `Eliminó a ${deletedUser} del sistema.`;
+      }
+      case "change_role": {
+        const previousRole = typeof details?.previousRole === "string" ? details.previousRole : "sin rol";
+        const newRole = typeof details?.newRole === "string" ? details.newRole : "sin rol";
+        return `Cambié el rol de un usuario de ${previousRole} a ${newRole}.`;
+      }
+      case "change_status": {
+        const previousStatus = typeof details?.previousStatus === "string" ? details.previousStatus : "desconocido";
+        const newStatus = typeof details?.newStatus === "string" ? details.newStatus : "desconocido";
+        return `Cambié el estado de un usuario de ${previousStatus} a ${newStatus}.`;
+      }
+      case "login": {
+        return "Inició sesión en el sistema.";
+      }
+      default:
+        return `Realizó la acción: ${actionLabel}.`;
+    }
+  } catch {
+    return item.details ? `Realizó la acción: ${actionLabel}.` : `Realizó la acción: ${actionLabel}.`;
+  }
+}
+
 /* ══════════════════════════════════════════════════════
    ROLE CONFIG
 ══════════════════════════════════════════════════════ */
@@ -158,6 +212,9 @@ type Tab = (typeof TABS)[number]["id"];
    PAGE
 ══════════════════════════════════════════════════════ */
 export function SettingsPage() {
+  const currentUser = getCurrentUser();
+  const isSupervisor = currentUser?.role === "supervisor";
+
   const navigateTo = (path: string) => {
     if (typeof window !== "undefined") {
       window.location.assign(path);
@@ -316,6 +373,10 @@ export function SettingsPage() {
   const totalMsgs = selectedAgentConversations.reduce((sum, conversation) => sum + (conversation.messages?.length ?? 0), 0);
 
   const backupChatsZip = async () => {
+    if (isSupervisor) {
+      setHistoryError("No tienes permisos para generar respaldos.");
+      return;
+    }
     setChatsStatus("running");
     try {
       const backup = await createBackup("chats", selectedAgentId);
@@ -336,6 +397,10 @@ export function SettingsPage() {
   };
 
   const backupContactsCSV = async () => {
+    if (isSupervisor) {
+      setHistoryError("No tienes permisos para generar respaldos.");
+      return;
+    }
     setContactsStatus("running");
     try {
       const backup = await createBackup("contacts");
@@ -356,6 +421,10 @@ export function SettingsPage() {
   };
 
   const backupFullZip = async () => {
+    if (isSupervisor) {
+      setHistoryError("No tienes permisos para generar respaldos.");
+      return;
+    }
     setFullStatus("running");
     try {
       const backup = await createBackup("full");
@@ -439,7 +508,7 @@ export function SettingsPage() {
                     description={selectedAgent ? `Exporta el historial del agente ${selectedAgent.name} (${selectedAgentConversations.length} conversaciones).` : "Selecciona un agente para descargar su historial de chats."}
                     formats={["zip"]}
                     status={chatsStatus}
-                    onBackupZip={backupChatsZip}
+                    onBackupZip={isSupervisor ? undefined : backupChatsZip}
                   >
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <label htmlFor="agent-backup-select" className="mb-2 block text-sm font-medium text-slate-700">
@@ -471,7 +540,7 @@ export function SettingsPage() {
                     description="Exporta los contactos del respaldo generado por el backend."
                     formats={["csv"]}
                     status={contactsStatus}
-                    onBackupCSV={backupContactsCSV}
+                    onBackupCSV={isSupervisor ? undefined : backupContactsCSV}
                   />
 
                   {/* Full backup */}
@@ -483,12 +552,17 @@ export function SettingsPage() {
                       </div>
                       {fullStatus === "done" && <CheckCircle2 size={18} className="mt-0.5 text-emerald-500" />}
                     </div>
-                    <button onClick={backupFullZip} disabled={fullStatus === "running"}
+                    <button onClick={backupFullZip} disabled={fullStatus === "running" || isSupervisor}
                       className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow transition-all hover:bg-blue-700 disabled:opacity-60">
                       {fullStatus === "running"
                         ? <><Loader2 size={16} className="animate-spin" />Generando respaldo…</>
                         : <><Download size={16} />Descargar respaldo completo</>}
                     </button>
+                    {isSupervisor && (
+                      <p className="flex items-center justify-center gap-1.5 text-xs text-amber-600">
+                        <AlertCircle size={12} />Solo los administradores pueden generar respaldos.
+                      </p>
+                    )}
                     {fullStatus === "done" && (
                       <p className="flex items-center justify-center gap-1.5 text-xs text-emerald-600">
                         <CheckCircle2 size={12} />Archivo generado y descargado correctamente
@@ -614,7 +688,7 @@ export function SettingsPage() {
                         <p className="text-sm font-semibold text-slate-800">{item.performedBy}</p>
                         <span className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
-                      <p className="mt-1 text-sm text-slate-600">{item.action} · {item.details}</p>
+                      <p className="mt-1 text-sm text-slate-600">{formatActivityMessage(item)}</p>
                     </div>
                   ))
                 )}

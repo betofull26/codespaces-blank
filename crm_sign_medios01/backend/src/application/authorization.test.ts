@@ -17,6 +17,16 @@ test('admins can manage users and admin modules', () => {
   assert.equal(canManageUsers('admin'), true);
 });
 
+test('supervisors can view backups but cannot manage them', () => {
+  assert.doesNotThrow(() => ensureAuthorized('supervisor', 'view-backups'));
+  assert.throws(() => ensureAuthorized('supervisor', 'manage-backups'), /Unauthorized/);
+});
+
+test('supervisors can access audit logs and templates', () => {
+  assert.doesNotThrow(() => ensureAuthorized('supervisor', 'view-audit-logs'));
+  assert.doesNotThrow(() => ensureAuthorized('supervisor', 'manage-templates'));
+});
+
 test('ensureAuthorized rejects unauthorized roles', () => {
   assert.throws(() => ensureAuthorized('agent', 'manage-users'), /Unauthorized/);
   assert.doesNotThrow(() => ensureAuthorized('admin', 'manage-users'));

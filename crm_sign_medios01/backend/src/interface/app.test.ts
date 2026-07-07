@@ -54,3 +54,18 @@ test('protected routes return 403 when the token is valid but permissions are in
     assert.equal(response.status, 403);
   });
 });
+
+test('audit logs are available to authorized users', async () => {
+  await withTestServer(async (port) => {
+    const token = buildSessionToken('user-1', 'admin');
+    const response = await fetch(`http://127.0.0.1:${port}/api/audit-logs`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(response.status, 200);
+
+    const body = await response.json() as { success: boolean; data: unknown[] };
+    assert.equal(body.success, true);
+    assert.ok(Array.isArray(body.data));
+  });
+});

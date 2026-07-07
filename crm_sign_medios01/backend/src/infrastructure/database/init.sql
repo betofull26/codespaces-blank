@@ -127,6 +127,13 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at)
 VALUES
-  ('user-admin-1', 'Administrador', 'admin', '$2b$10$qcqISJoLWPKLqXHlKpGTkO0kVHN9gJZgBNg3HzKjQ0P7u6P6G4kMi', 'admin', 'active', TRUE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z')
-ON CONFLICT (id) DO NOTHING;
+  ('user-admin-1', 'Administrador', 'admin', '$2b$10$hg4TvuIRgYqYhGHt5Yg4aesOkO907HPGOJ6eyjw4.PlfMyTcD4q/u', 'admin', 'active', TRUE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z')
+ON CONFLICT (id) DO UPDATE SET
+  full_name = EXCLUDED.full_name,
+  username = EXCLUDED.username,
+  password_hash = EXCLUDED.password_hash,
+  role = EXCLUDED.role,
+  status = EXCLUDED.status,
+  access_to_panel = EXCLUDED.access_to_panel,
+  updated_at = EXCLUDED.updated_at;
 

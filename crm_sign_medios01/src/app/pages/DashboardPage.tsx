@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Search, Send, Loader2, Phone, Clock } from "lucide-react";
+import { io, type Socket } from "socket.io-client";
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
 import { fetchConversationMessages, fetchConversations, postConversationIntervention } from "../services/dashboardApi";
@@ -48,6 +49,42 @@ export function DashboardPage() {
   const [draftMessage, setDraftMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [interventionError, setInterventionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let socket: Socket | null = null;
+
+    try {
+      socket = io();
+      socket.on("message.created", (payload: any) => {
+        const conversationId = payload?.conversationId;
+        const message = payload?.message;
+        if (!conversationId || !message) return;
+
+        setMessagesByConversation((current) => ({
+          ...current,
+          [conversationId]: [...(current[conversationId] ?? []), message],
+        }));
+
+        setConversations((current) =>
+          current.map((conversation) =>
+            conversation.id === conversationId
+              ? { ...conversation, messages: [...(conversation.messages ?? []), message] }
+              : conversation,
+          ),
+        );
+      });
+    } catch (error) {
+      console.error("Realtime client init failed", error);
+    }
+
+    return () => {
+      try {
+        socket?.disconnect();
+      } catch {
+        // ignore cleanup failures
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const loadConversations = async () => {

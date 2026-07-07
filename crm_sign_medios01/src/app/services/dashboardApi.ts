@@ -182,23 +182,23 @@ export async function fetchUsers(role: string): Promise<BackendUser[]> {
   });
 }
 
-export async function createUser(payload: UserCreatePayload, role: string): Promise<BackendUser> {
+export async function createUser(payload: UserCreatePayload, role: string, actorId?: string): Promise<BackendUser> {
   return requestApiData<BackendUser>("/users", {
     method: "POST",
     headers: {
       "x-user-role": role,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actorId }),
   });
 }
 
-export async function updateUser(userId: string, payload: UserCreatePayload, role: string): Promise<BackendUser> {
+export async function updateUser(userId: string, payload: UserCreatePayload, role: string, actorId?: string): Promise<BackendUser> {
   return requestApiData<BackendUser>(`/users/${encodeURIComponent(userId)}`, {
     method: "PUT",
     headers: {
       "x-user-role": role,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, actorId }),
   });
 }
 
@@ -212,11 +212,12 @@ export async function updateUserStatus(userId: string, status: BackendUser["stat
   });
 }
 
-export async function deleteUserById(userId: string, role: string): Promise<void> {
+export async function deleteUserById(userId: string, role: string, actorId?: string): Promise<void> {
   await requestJson<void>(`/users/${encodeURIComponent(userId)}`, {
     method: "DELETE",
     headers: {
       "x-user-role": role,
     },
+    body: JSON.stringify({ actorId }),
   });
 }

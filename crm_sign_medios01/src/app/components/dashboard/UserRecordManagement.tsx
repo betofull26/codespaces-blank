@@ -3,7 +3,7 @@ import { Plus, Pencil, Trash2, Camera, Search } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { UserRecordForm } from "./UserRecordForm";
 import { createUser, deleteUserById, fetchUsers, updateUser, updateUserStatus, type BackendUser } from "../../services/dashboardApi";
-import { getCurrentUser } from "../../lib/auth";
+import { getCurrentUser, getCurrentUserRole } from "../../lib/auth";
 
 const USER_RECORDS_STORAGE_KEY = "crm-sign-user-records";
 
@@ -25,6 +25,10 @@ export interface UserRecord {
 }
 
 export function UserRecordManagement() {
+  const currentUser = getCurrentUser();
+  const currentRole = getCurrentUserRole() ?? "agent";
+  const canManageUsers = currentRole === "admin";
+  const isSupervisor = currentRole === "supervisor";
   const [records, setRecords] = useState<UserRecord[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<UserRecord | null>(null);
@@ -113,8 +117,7 @@ export function UserRecordManagement() {
   });
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    const role = currentUser?.role ?? "agent";
+    const role = currentRole;
     const storedRecords = localStorage.getItem(USER_RECORDS_STORAGE_KEY);
     let parsedStoredRecords: UserRecord[] = [];
 
@@ -142,12 +145,11 @@ export function UserRecordManagement() {
   const handleAddRecord = async (record: Omit<UserRecord, "id">) => {
     setIsSaving(true);
     setStatusMessage(null);
-    const currentUser = getCurrentUser();
-    const role = currentUser?.role ?? "agent";
+    const role = currentRole;
     const payload = buildPayload(record);
 
     try {
-      const created = await createUser(payload, role);
+      const created = await createUser(payload, role, currentUser?.id ?? "system");
       const nextRecord: UserRecord = {
         id: created.id,
         name: created.fullName,
@@ -186,12 +188,11 @@ export function UserRecordManagement() {
     if (!editingRecord) return;
     setIsSaving(true);
     setStatusMessage(null);
-    const currentUser = getCurrentUser();
-    const role = currentUser?.role ?? "agent";
+    const role = currentRole;
     const payload = buildPayload(record);
 
     try {
-      const updated = await updateUser(editingRecord.id, payload, role);
+      const updated = await updateUser(editingRecord.id, payload, role, currentUser?.id ?? "system");
       const nextRecords = records.map((r) => (r.id === editingRecord.id ? {
         ...r,
         ...record,
@@ -222,10 +223,9 @@ export function UserRecordManagement() {
     if (confirm("¿Estás seguro de que deseas eliminar esta ficha? Se revocará el acceso al panel si aplica.")) {
       setIsSaving(true);
       setStatusMessage(null);
-      const currentUser = getCurrentUser();
-      const role = currentUser?.role ?? "agent";
+      const role = currentRole;
       try {
-        await deleteUserById(id, role);
+        await deleteUserById(id, role, currentUser?.id ?? "system");
         const nextRecords = records.filter((record) => record.id !== id);
         persistRecords(nextRecords);
         showStatusMessage("✓ Ficha eliminada correctamente", 3000);
@@ -285,7 +285,7 @@ export function UserRecordManagement() {
           </div>
           <button
             onClick={openAddForm}
-            disabled={isSaving}
+            disabled={isSaving || !canManageUsers}
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-500/25 transition-all hover:bg-blue-700 active:scale-[0.985] disabled:cursor-not-allowed disabled:bg-slate-400"
           >
             <Plus size={18} strokeWidth={2.5} />
@@ -309,6 +309,12 @@ export function UserRecordManagement() {
       {statusMessage && (
         <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-700">
           {statusMessage}
+        </div>
+      )}
+
+      {!canManageUsers && (
+        <div className="border-t border-slate-200 bg-amber-50 px-5 py-3 text-sm text-amber-700">
+          Solo los administradores pueden crear, editar o eliminar fichas.
         </div>
       )}
 
@@ -370,14 +376,16 @@ export function UserRecordManagement() {
             <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
               <button
                 onClick={() => openEditForm(record)}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-400"
+                disabled={isSupervisor}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Pencil size={14} />
                 Editar
               </button>
               <button
                 onClick={() => handleDeleteRecord(record.id)}
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-50 hover:border-red-300"
+                disabled={isSupervisor}
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-50 hover:border-red-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Trash2 size={14} />
                 Eliminar

@@ -1,11 +1,14 @@
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
+import { getCurrentUser } from "../lib/auth";
 import { useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
 import { fetchAgents, fetchContacts, createContact } from "../services/dashboardApi";
 import type { Agent } from "../components/dashboard/types";
 
 export function DirectorioPage() {
+  const currentUser = getCurrentUser();
+  const isSupervisor = currentUser?.role === "supervisor";
   const [agents, setAgents] = useState<Agent[]>([]);
   const [contacts, setContacts] = useState<{ id: string; name: string; phone: string; createdAt: string; agentId: string | null }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -103,7 +106,7 @@ export function DirectorioPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <button
                 type="button"
-                className="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-2 text-white transition hover:bg-blue-700"
+                className="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-2 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                 onClick={onAddNumber}
               >
                 <UserPlus size={16} />

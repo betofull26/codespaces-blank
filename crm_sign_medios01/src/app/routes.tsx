@@ -6,12 +6,16 @@ import { DirectorioPage } from "./pages/DirectorioPage";
 import { ConexionDispositivosPage } from "./pages/ConexionDispositivosPage";
 import { PlantilladasPage } from "./pages/PlantilladasPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { AgentHomePage } from "./pages/AgentHomePage";
 import { clearCurrentUser, getCurrentUser, isSessionExpired } from "./lib/auth";
 
 const requireAuth = () => {
   const user = getCurrentUser();
   if (!user || isSessionExpired()) {
+    clearCurrentUser();
+    throw redirect("/");
+  }
+
+  if (user.role === "agent") {
     clearCurrentUser();
     throw redirect("/");
   }
@@ -68,10 +72,5 @@ export const router = createBrowserRouter([
     path: "/ajustes",
     Component: SettingsPage,
     loader: requireAdminOrSupervisor,
-  },
-  {
-    path: "/agent-home",
-    Component: AgentHomePage,
-    loader: requireAuth,
   },
 ]);
