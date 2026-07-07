@@ -15,6 +15,8 @@ function figmaAssetResolver() {
   }
 }
 
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3000';
+
 export default defineConfig({
   plugins: [
     figmaAssetResolver(),
@@ -30,9 +32,10 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
     },

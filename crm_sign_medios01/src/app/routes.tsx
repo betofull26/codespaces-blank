@@ -6,6 +6,7 @@ import { DirectorioPage } from "./pages/DirectorioPage";
 import { ConexionDispositivosPage } from "./pages/ConexionDispositivosPage";
 import { PlantilladasPage } from "./pages/PlantilladasPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { AgentHomePage } from "./pages/AgentHomePage";
 import { clearCurrentUser, getCurrentUser, isSessionExpired } from "./lib/auth";
 
 const requireAuth = () => {
@@ -13,6 +14,21 @@ const requireAuth = () => {
   if (!user || isSessionExpired()) {
     clearCurrentUser();
     throw redirect("/");
+  }
+
+  return null;
+};
+
+const requireAdminOrSupervisor = () => {
+  const user = getCurrentUser();
+  
+  if (!user || isSessionExpired()) {
+    clearCurrentUser();
+    throw redirect("/");
+  }
+
+  if (user.role !== "admin" && user.role !== "supervisor") {
+    throw redirect("/directorio");
   }
 
   return null;
@@ -26,12 +42,12 @@ export const router = createBrowserRouter([
   {
     path: "/dashboard",
     Component: DashboardPage,
-    loader: requireAuth,
+    loader: requireAdminOrSupervisor,
   },
   {
     path: "/gestion-fichas",
     Component: UserManagementPage,
-    loader: requireAuth,
+    loader: requireAdminOrSupervisor,
   },
   {
     path: "/directorio",
@@ -41,7 +57,7 @@ export const router = createBrowserRouter([
   {
     path: "/conexion-dispositivos",
     Component: ConexionDispositivosPage,
-    loader: requireAuth,
+    loader: requireAdminOrSupervisor,
   },
   {
     path: "/plantilladas",
@@ -51,6 +67,11 @@ export const router = createBrowserRouter([
   {
     path: "/ajustes",
     Component: SettingsPage,
+    loader: requireAdminOrSupervisor,
+  },
+  {
+    path: "/agent-home",
+    Component: AgentHomePage,
     loader: requireAuth,
   },
 ]);

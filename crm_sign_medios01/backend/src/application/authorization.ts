@@ -4,7 +4,9 @@ export const canAccessAdminModule = (role: UserRole): boolean => role === 'admin
 
 export const canManageUsers = (role: UserRole): boolean => role === 'admin';
 
-export const ensureAuthorized = (role: UserRole, action: 'manage-users' | 'view-users' | 'access-admin' | 'manage-backups' | 'view-backups'): void => {
+export const canManageDevices = (role: UserRole): boolean => role === 'admin';
+
+export const ensureAuthorized = (role: UserRole, action: 'manage-users' | 'view-users' | 'access-admin' | 'manage-backups' | 'view-backups' | 'manage-devices'): void => {
   if (action === 'manage-users' && !canManageUsers(role)) {
     throw new Error('Unauthorized');
   }
@@ -18,6 +20,10 @@ export const ensureAuthorized = (role: UserRole, action: 'manage-users' | 'view-
   }
 
   if ((action === 'manage-backups' || action === 'view-backups') && role !== 'admin') {
+    throw new Error('Unauthorized');
+  }
+
+  if (action === 'manage-devices' && !canManageDevices(role)) {
     throw new Error('Unauthorized');
   }
 };

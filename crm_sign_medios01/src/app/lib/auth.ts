@@ -73,6 +73,9 @@ export async function loginWithBackend(username: string, password: string): Prom
 }
 
 export function homeRouteFor(role: UserRole): string {
+  if (role === "agent") {
+    return "/agent-home";
+  }
   return "/dashboard";
 }
 

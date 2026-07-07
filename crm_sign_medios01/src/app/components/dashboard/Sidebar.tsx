@@ -19,16 +19,17 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
     setCurrentUser(getCurrentUser());
   }, []);
 
+  const isAdminOrSupervisor = currentUser?.role === "admin" || currentUser?.role === "supervisor";
+
+  if (!currentUser) {
+    return null;
+  }
+
   const handleLogout = async () => {
     await clearCurrentUser();
     setCurrentUser(null);
     navigate("/", { replace: true });
   };
-
-  if (currentUser?.role === "agent") {
-    navigate("/dashboard", { replace: true });
-    return null;
-  }
 
   return (
     <aside className="flex w-72 flex-col border-r border-slate-200 bg-white shadow-sm">
@@ -44,27 +45,29 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <div className="space-y-1">
-          {/* Dashboard */}
-          <div
-            className={[
-              "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
-              selectedNode === "dashboard"
-                ? "bg-blue-50 font-semibold text-blue-700"
-                : "text-slate-700 hover:bg-slate-100",
-            ].join(" ")}
-            onClick={() => navigate("/dashboard")}
-          >
-            <Home
-              size={18}
-              className={selectedNode === "dashboard" ? "text-blue-600" : "text-slate-500"}
-            />
-            <span className="flex-1 truncate">Dashboard</span>
-            {selectedNode === "dashboard" && (
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-            )}
-          </div>
+          {/* Dashboard - Solo Admin/Supervisor */}
+          {isAdminOrSupervisor && (
+            <div
+              className={[
+                "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
+                selectedNode === "dashboard"
+                  ? "bg-blue-50 font-semibold text-blue-700"
+                  : "text-slate-700 hover:bg-slate-100",
+              ].join(" ")}
+              onClick={() => navigate("/dashboard")}
+            >
+              <Home
+                size={18}
+                className={selectedNode === "dashboard" ? "text-blue-600" : "text-slate-500"}
+              />
+              <span className="flex-1 truncate">Dashboard</span>
+              {selectedNode === "dashboard" && (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+              )}
+            </div>
+          )}
 
-          {/* Directorio */}
+          {/* Directorio - Todos */}
           <div
             className={[
               "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
@@ -84,27 +87,29 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
             )}
           </div>
 
-          {/* Conexión de Dispositivos */}
-          <div
-            className={[
-              "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
-              selectedNode === "conexion-dispositivos"
-                ? "bg-blue-50 font-semibold text-blue-700"
-                : "text-slate-700 hover:bg-slate-100",
-            ].join(" ")}
-            onClick={() => navigate("/conexion-dispositivos")}
-          >
-            <Smartphone
-              size={18}
-              className={selectedNode === "conexion-dispositivos" ? "text-blue-600" : "text-slate-500"}
-            />
-            <span className="flex-1 truncate">Conexión de Dispositivos</span>
-            {selectedNode === "conexion-dispositivos" && (
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-            )}
-          </div>
+          {/* Conexión de Dispositivos - Solo Admin/Supervisor */}
+          {isAdminOrSupervisor && (
+            <div
+              className={[
+                "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
+                selectedNode === "conexion-dispositivos"
+                  ? "bg-blue-50 font-semibold text-blue-700"
+                  : "text-slate-700 hover:bg-slate-100",
+              ].join(" ")}
+              onClick={() => navigate("/conexion-dispositivos")}
+            >
+              <Smartphone
+                size={18}
+                className={selectedNode === "conexion-dispositivos" ? "text-blue-600" : "text-slate-500"}
+              />
+              <span className="flex-1 truncate">Conexión de Dispositivos</span>
+              {selectedNode === "conexion-dispositivos" && (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+              )}
+            </div>
+          )}
 
-          {/* Plantilladas */}
+          {/* Plantilladas - Todos */}
           <div
             className={[
               "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
@@ -124,25 +129,27 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
             )}
           </div>
 
-          {/* Ajustes */}
-          <div
-            className={[
-              "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
-              selectedNode === "ajustes"
-                ? "bg-blue-50 font-semibold text-blue-700"
-                : "text-slate-700 hover:bg-slate-100",
-            ].join(" ")}
-            onClick={() => navigate("/ajustes")}
-          >
-            <SlidersHorizontal
-              size={18}
-              className={selectedNode === "ajustes" ? "text-blue-600" : "text-slate-500"}
-            />
-            <span className="flex-1 truncate">Ajustes</span>
-            {selectedNode === "ajustes" && (
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-            )}
-          </div>
+          {/* Ajustes - Solo Admin/Supervisor */}
+          {isAdminOrSupervisor && (
+            <div
+              className={[
+                "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
+                selectedNode === "ajustes"
+                  ? "bg-blue-50 font-semibold text-blue-700"
+                  : "text-slate-700 hover:bg-slate-100",
+              ].join(" ")}
+              onClick={() => navigate("/ajustes")}
+            >
+              <SlidersHorizontal
+                size={18}
+                className={selectedNode === "ajustes" ? "text-blue-600" : "text-slate-500"}
+              />
+              <span className="flex-1 truncate">Ajustes</span>
+              {selectedNode === "ajustes" && (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -155,7 +162,7 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
                 SM
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-800">Supervisor</p>
+                <p className="truncate text-sm font-semibold text-slate-800">{currentUser.title}</p>
               </div>
             </button>
           </DropdownMenu.Trigger>

@@ -57,6 +57,36 @@ const roleConfig: Record<Role, { icon: React.ReactNode; color: string; bg: strin
   },
 };
 
+const rolePermissions: Record<Role, Record<string, boolean>> = {
+  "Administrador": {
+    "Acceso a módulo admin": true,
+    "Gestionar usuarios": true,
+    "Ver usuarios": true,
+    "Gestionar backups": true,
+    "Ver backups": true,
+    "Conectar dispositivos": true,
+    "Ver reportes": true,
+  },
+  "Supervisor": {
+    "Acceso a módulo admin": true,
+    "Gestionar usuarios": false,
+    "Ver usuarios": true,
+    "Gestionar backups": false,
+    "Ver backups": false,
+    "Conectar dispositivos": false,
+    "Ver reportes": true,
+  },
+  "Agente": {
+    "Acceso a módulo admin": false,
+    "Gestionar usuarios": false,
+    "Ver usuarios": false,
+    "Gestionar backups": false,
+    "Ver backups": false,
+    "Conectar dispositivos": false,
+    "Ver reportes": false,
+  },
+};
+
 /* ══════════════════════════════════════════════════════
    SUB-COMPONENTS — Backup
 ══════════════════════════════════════════════════════ */
