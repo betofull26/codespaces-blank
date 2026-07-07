@@ -1,0 +1,84 @@
+# Estructura del Proyecto CRM SIGN Medios
+
+Este archivo detalla la organización de los directorios y archivos del proyecto, explicando su propósito y ubicación dentro de la arquitectura.
+
+## Raíz del Proyecto (`/crm_sign_medios01`)
+
+- **backend/**: Contiene el servidor lógico y la API del sistema (Node.js + TypeScript).
+- **src/**: Directorio principal del frontend (React + Vite).
+- **storage/**: Almacenamiento local para copias de seguridad de la base de datos.
+- **clean-architecture-plan/**: Documentación y seguimiento de la migración hacia Clean Architecture.
+- **login-business-plan/**: Requisitos y flujos de negocio para la autenticación.
+- **equipos-permisos-plan/**: Estrategia de gestión de roles y permisos.
+- **guidelines/**: Reglas de diseño y desarrollo.
+- **index.html**: Punto de entrada del frontend.
+- **package.json**: Dependencias y scripts del frontend.
+- **REVISION_IA.me**: Guía para revisar código generado por inteligencia artificial.
+- **ESTRUCTURA_PROYECTO.me**: Este archivo descriptivo.
+
+---
+
+## Backend (`/backend/src`)
+
+Sigue el patrón de **Clean Architecture**:
+
+### 1. Dominio (`/src/domain`)
+Define el núcleo del negocio sin dependencias técnicas.
+- **models.ts**: Definiciones de las entidades principales (Agente, Conversación, Mensaje).
+- **repositories.ts**: Contratos (interfaces) para el acceso a datos.
+
+### 2. Aplicación (`/src/application`)
+Contiene los casos de uso que orquestan la lógica.
+- **useCases.ts**: Lógica para crear mensajes, listar agentes y gestionar conversaciones.
+- **authService.ts**: Gestión de lógica de autenticación.
+- **backupService.ts**: Lógica para la creación y gestión de respaldos.
+- **userManagement.ts**: Gestión de perfiles de usuario y roles.
+
+### 3. Infraestructura (`/src/infrastructure`)
+Implementaciones técnicas y conexiones externas.
+- **database/**: Conexión a PostgreSQL, inicialización de tablas y repositorios concretos.
+- **http/**: Controladores, rutas de Express, validadores y middleware de seguridad.
+- **whatsapp/**: Cliente para la integración con la API de WhatsApp.
+- **realtime/**: Configuración de WebSockets (Socket.io).
+
+### 4. Interfaz (`/src/interface`)
+Adaptadores para la entrada y salida de datos.
+- **dtos.ts**: Objetos de transferencia de datos para estandarizar las respuestas de la API.
+- **app.ts**: Configuración principal de la aplicación Express.
+
+---
+
+## Frontend (`/src/app`)
+
+Organizado por responsabilidades de UI y lógica de cliente:
+
+### 1. Páginas (`/src/app/pages`)
+Vistas completas de la aplicación.
+- **LoginPage.tsx**: Pantalla de acceso.
+- **DashboardPage.tsx**: Panel principal de control.
+- **UserManagementPage.tsx**: Gestión de agentes y fichas.
+- **DirectorioPage.tsx**: Listado de contactos.
+- **SettingsPage.tsx**: Ajustes del sistema.
+
+### 2. Componentes (`/src/app/components`)
+Piezas reutilizables de la interfaz.
+- **ui/**: Componentes base (Botones, Inputs, Cards) basados en Shadcn UI / Radix.
+- **dashboard/**: Componentes específicos del panel (Gráficos, Listas de chats, KPIs).
+- **LoginCard.tsx**: Tarjeta contenedora del formulario de acceso.
+
+### 3. Lógica y Estado (`/src/app/lib` y `/src/app/services`)
+- **auth.ts**: Gestión del estado de sesión y almacenamiento de tokens en el navegador.
+- **apiClient.ts**: Configuración base de llamadas HTTP (Axios/Fetch).
+- **dashboardApi.ts**: Servicios específicos para interactuar con la API del backend.
+
+### 4. Estilos e Imágenes (`/src/styles` y `/src/imports`)
+- **styles/**: Archivos CSS globales, configuración de Tailwind y temas de diseño.
+- **imports/**: Activos estáticos como imágenes y recursos visuales.
+
+---
+
+## Otros Archivos de Configuración
+- **vite.config.ts**: Configuración del empaquetador del frontend.
+- **tsconfig.json**: Reglas de compilación de TypeScript para backend y frontend.
+- **docker-compose.yml**: Configuración para despliegue en contenedores.
+- **.env**: Variables de entorno (Base de datos, puertos, secretos).

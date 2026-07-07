@@ -1,0 +1,37 @@
+# Guía de Revisión de Código Generado por IA - CRM SIGN Medios
+
+Esta guía establece los criterios y procesos para auditar y validar el código producido por asistentes de inteligencia artificial, garantizando que se integre correctamente con la arquitectura limpia y los estándares de calidad del proyecto.
+
+## 1. Validación Arquitectónica (Clean Architecture)
+El proyecto se rige por una separación estricta de responsabilidades. Cualquier código nuevo debe ubicarse en la capa correspondiente:
+- **Capa de Dominio:** Verificar que las entidades y reglas de negocio sean puras. No deben tener dependencias de frameworks, bases de datos o librerías externas.
+- **Capa de Aplicación:** Los casos de uso deben orquestar la lógica sin conocer detalles técnicos de la infraestructura.
+- **Capa de Infraestructura:** Aquí deben residir las implementaciones técnicas como adaptadores de base de datos, servicios de mensajería (WhatsApp) o integraciones de red.
+- **Capa de Interfaces:** Los controladores y rutas deben limitarse a la conversión de datos y la gestión de peticiones/respuestas.
+
+## 2. Estándares de Interfaz de Usuario (Frontend)
+El frontend utiliza React, Material UI, Radix UI y Tailwind CSS. La revisión debe asegurar:
+- **Maquetación Responsiva:** Uso preferente de Flexbox y Grid. Evitar el uso de posicionamiento absoluto a menos que sea estrictamente necesario para elementos flotantes.
+- **Modularidad:** Los componentes deben ser pequeños y tener una única responsabilidad. Si un componente generado es demasiado extenso, debe solicitarse su refactorización en subcomponentes.
+- **Tokens de Diseño:** Uso consistente de las variables de tema y colores definidos para mantener la coherencia visual.
+
+## 3. Seguridad y Control de Acceso
+El sistema gestiona roles críticos (Administrador, Supervisor, Agente). La revisión debe validar:
+- **Autorización:** Asegurar que los nuevos endpoints o rutas verifiquen el rol del usuario antes de permitir el acceso.
+- **Manejo de Sesiones:** Verificar que la persistencia de la sesión y la gestión de tokens sigan los flujos de seguridad establecidos.
+- **Mensajería de Error:** Los errores en procesos de autenticación deben ser siempre genéricos para evitar la enumeración de usuarios o la filtración de información sobre la estructura interna.
+
+## 4. Lógica de Negocio e Integraciones
+- **Integración con WhatsApp:** Verificar que el procesamiento de mensajes entrantes gestione correctamente los identificadores únicos para evitar duplicados y asegure la vinculación correcta con la conversación del agente.
+- **Flujos de Estado:** Las transiciones de estado en las conversaciones deben respetar las reglas de negocio (ej. cambio de estado de espera a activo tras la asignación).
+
+## 5. Calidad del Código y Tipado
+- **TypeScript Estricto:** No se permite el uso del tipo genérico "any". Todas las estructuras de datos deben estar correctamente tipadas mediante interfaces o tipos específicos.
+- **Principios SOLID:** El código debe ser fácil de extender pero cerrado a modificaciones que rompan la base existente. Cada función debe realizar una sola tarea.
+- **Documentación:** El código complejo debe incluir comentarios explicativos sobre el "por qué" de la lógica, no solo sobre el "qué" hace.
+
+## 6. Proceso de Verificación
+- **Pruebas Unitarias:** La IA debe ser capaz de generar pruebas que validen la lógica propuesta. Estas pruebas deben ejecutarse para confirmar que no hay regresiones.
+- **Revisiones Incrementales:** Es preferible revisar cambios pequeños y modulares en lugar de grandes bloques de código generados de una sola vez.
+
+Esta guía asegura que la velocidad proporcionada por la IA no comprometa la robustez y mantenibilidad a largo plazo del CRM.
