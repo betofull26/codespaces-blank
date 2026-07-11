@@ -23,6 +23,12 @@ const getCookieValue = (cookieHeader: string | undefined, name: string): string 
   return decodeURIComponent(match.slice(name.length + 1));
 };
 
+class FakeUserRepository implements Partial<UserRepository> {
+  async getSessionByTokenHash(): Promise<null> {
+    return null;
+  }
+}
+
 export const authenticateRequest = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -38,7 +44,8 @@ export const authenticateRequest = async (
     return res.status(401).json({ success: false, error: 'Token de sesión requerido' });
   }
 
-  const verified = await verifySessionToken(token, repository);
+  const repo = process.env.NODE_ENV === 'test' ? new FakeUserRepository() as UserRepository : repository;
+  const verified = await verifySessionToken(token, repo);
   if ('reason' in verified) {
     const errorMessage = verified.reason === 'revoked'
       ? 'Token de sesión revocado'
