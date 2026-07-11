@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Home, BookUser, Smartphone, FileText, LogOut, SlidersHorizontal } from "lucide-react";
+import { Home, BookUser, Smartphone, FileText, LogOut, SlidersHorizontal, MessageSquare } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { AuthUser, clearCurrentUser, getCurrentUser } from "../../lib/auth";
@@ -83,6 +83,26 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
             />
             <span className="flex-1 truncate">Directorio</span>
             {selectedNode === "directorio" && (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+            )}
+          </div>
+
+          {/* Chats - Todos */}
+          <div
+            className={[
+              "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
+              selectedNode === "chats"
+                ? "bg-blue-50 font-semibold text-blue-700"
+                : "text-slate-700 hover:bg-slate-100",
+            ].join(" ")}
+            onClick={() => navigate("/dashboard")}
+          >
+            <MessageSquare
+              size={18}
+              className={selectedNode === "chats" ? "text-blue-600" : "text-slate-500"}
+            />
+            <span className="flex-1 truncate">Chats</span>
+            {selectedNode === "chats" && (
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
             )}
           </div>
