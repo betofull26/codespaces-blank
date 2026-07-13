@@ -35,6 +35,9 @@ export const config = {
   whatsappApiUrl,
   whatsappSendUrl,
   metaVerifyToken: process.env.META_VERIFY_TOKEN ?? 'dev-verify-token',
+  metaAppId: process.env.META_APP_ID ?? '',
   metaAppSecret: process.env.META_APP_SECRET ?? '',
+  metaGraphVersion: process.env.META_GRAPH_VERSION ?? 'v16.0',
+  metaOauthRedirectUri: process.env.META_OAUTH_REDIRECT_URI ?? '',
   defaultPhoneCountryCode: process.env.DEFAULT_PHONE_COUNTRY_CODE ?? '54',
 };

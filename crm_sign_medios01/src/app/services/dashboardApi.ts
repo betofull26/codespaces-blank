@@ -174,6 +174,14 @@ export async function postWhatsAppWebhook(payload: WhatsAppWebhookPayload): Prom
     body: JSON.stringify(payload),
   });
 }
+
+export async function exchangeWhatsAppSignupCode(code: string): Promise<{ success: boolean }> {
+  return requestApiData<{ success: boolean }>("/waba/onboard/exchange", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
 export async function fetchUsers(role: string): Promise<BackendUser[]> {
   return requestApiData<BackendUser[]>("/users", {
     headers: {

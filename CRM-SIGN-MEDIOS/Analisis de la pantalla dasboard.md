@@ -50,7 +50,8 @@ Si no hay ninguna conversación seleccionada, se muestra un estado vacío intera
   - Botón de envío con ícono de avión de papel (`Send`). Cuando se está procesando el envío, el botón se deshabilita y muestra un spinner de carga animado (`Loader2`).
   - Mapeo y visualización de errores específicos de red o de permisos si la intervención falla.
 
----
+
+//La logica de abajo hay que cambiarla.
 
 ## 3. Flujo de Datos y Tiempo Real (WebSockets)
 

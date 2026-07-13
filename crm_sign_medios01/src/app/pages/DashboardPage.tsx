@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
+import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { fetchConversations } from "../services/dashboardApi";
 import type { Conversation } from "../components/dashboard/types";
 

@@ -90,7 +90,6 @@ export function DirectorioPage() {
         <main className="flex-1 overflow-y-auto px-6 py-5">
           <div className="mb-4">
             <h1 className="text-xl font-semibold text-slate-800">Directorio</h1>
-            <p className="mt-1 text-sm text-slate-600">Contactos organizados por cuenta de WhatsApp del agente.</p>
           </div>
 
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

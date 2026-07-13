@@ -64,6 +64,11 @@ export const router = createBrowserRouter([
     loader: requireAdminOrSupervisor,
   },
   {
+    path: "/devices/connect",
+    Component: ConexionDispositivosPage,
+    loader: requireAdminOrSupervisor,
+  },
+  {
     path: "/plantilladas",
     Component: PlantilladasPage,
     loader: requireAuth,

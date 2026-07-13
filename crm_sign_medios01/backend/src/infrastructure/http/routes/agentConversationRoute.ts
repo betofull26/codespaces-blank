@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createMessage, ingestWhatsAppMessage, listAgents, getConversationsByAgentId, listMessagesByConversationId, listConversations } from '../../../application/useCases.js';
 import { buildErrorResponse, buildSuccessResponse } from '../../../common/apiResponse.js';
+import { config } from '../../../common/config.js';
 import { authenticateRequest } from '../middleware/authMiddleware.js';
 import { requireHttps } from '../middleware/requireHttps.js';
 import { PostgresAgentRepository, PostgresConversationRepository, PostgresMessageRepository } from '../../../infrastructure/database/repositories.js';
@@ -12,6 +13,23 @@ import { sendTextMessage, getMetrics as getWhatsAppMetrics } from '../../whatsap
 import { verifyMetaWebhook } from '../controllers/whatsappWebhookController.js';
 
 export const agentConversationRouter = Router();
+
+const exchangeMetaSignupCode = async (code: string, redirectUri: string) => {
+  const url = new URL(`https://graph.facebook.com/${config.metaGraphVersion}/oauth/access_token`);
+  url.searchParams.set('client_id', config.metaAppId);
+  url.searchParams.set('client_secret', config.metaAppSecret);
+  url.searchParams.set('code', code);
+  if (redirectUri) {
+    url.searchParams.set('redirect_uri', redirectUri);
+  }
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+  });
+
+  const payload = await response.json().catch(() => null);
+  return { ok: response.ok, status: response.status, payload };
+};
 
 agentConversationRouter.get('/agents', async (_req, res) => {
   try {
@@ -59,6 +77,36 @@ agentConversationRouter.get('/whatsapp/metrics', async (_req, res) => {
     res.json(buildSuccessResponse(m, 'WhatsApp metrics'));
   } catch (e) {
     res.status(500).json(buildErrorResponse('Could not get metrics', e instanceof Error ? e.message : 'UNKNOWN_ERROR'));
+  }
+});
+
+agentConversationRouter.post('/waba/onboard/exchange', async (req, res) => {
+  try {
+    await authenticateRequest(req as any, res, async () => {
+      if (!config.metaAppId || !config.metaAppSecret) {
+        return res.status(500).json(buildErrorResponse('Configuración de Meta incompleta en el backend', 'META_CONFIG_MISSING'));
+      }
+
+      const payload = req.body ?? {};
+      const code = typeof payload.code === 'string' && payload.code.trim() ? payload.code.trim() : null;
+
+      if (!code) {
+        return res.status(400).json(buildErrorResponse('Código de registro de WhatsApp no proporcionado', 'MISSING_CODE'));
+      }
+
+      const redirectUri = config.metaOauthRedirectUri || (req.headers.origin as string) || '';
+      const result = await exchangeMetaSignupCode(code, redirectUri);
+
+      if (!result.ok) {
+        return res.status(result.status || 500).json(buildErrorResponse('No se pudo intercambiar el código de Meta', 'GRAPH_API_ERROR'));
+      }
+
+      // En este paso 1 solo validamos el intercambio de código. En la siguiente etapa se deben
+      // almacenar los datos de WABA obtenidos y continuar con el onboarding completo.
+      return res.status(200).json(buildSuccessResponse({ success: true, tokenData: result.payload }, 'Código intercambiado correctamente'));
+    });
+  } catch (error) {
+    res.status(500).json(buildErrorResponse('No se pudo procesar el código de onboarding de WhatsApp', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));
   }
 });
 
