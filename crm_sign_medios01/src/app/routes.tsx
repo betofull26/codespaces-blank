@@ -3,7 +3,6 @@ import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
 import { DirectorioPage } from "./pages/DirectorioPage";
-import { ConexionDispositivosPage } from "./pages/ConexionDispositivosPage";
 import { PlantilladasPage } from "./pages/PlantilladasPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { clearCurrentUser, getCurrentUser, isSessionExpired } from "./lib/auth";
@@ -57,16 +56,6 @@ export const router = createBrowserRouter([
     path: "/directorio",
     Component: DirectorioPage,
     loader: requireAuth,
-  },
-  {
-    path: "/conexion-dispositivos",
-    Component: ConexionDispositivosPage,
-    loader: requireAdminOrSupervisor,
-  },
-  {
-    path: "/devices/connect",
-    Component: ConexionDispositivosPage,
-    loader: requireAdminOrSupervisor,
   },
   {
     path: "/plantilladas",

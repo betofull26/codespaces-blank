@@ -40,7 +40,7 @@ Objetivo: permitir a clientes empresariales completar el proceso de registro ins
 3. Seguridad: no enviar `APP_SECRET` al cliente. Solo enviar `config_id` y `APP_ID` públicos.
 
 Archivo que edito el agente para implementar el frontend
-- `src/app/pages/ConexionDispositivosPage.tsx`
+- ~~`src/app/pages/ConexionDispositivosPage.tsx`~~ **(ELIMINADO - Código obsoleto)**
 - `src/app/services/dashboardApi.ts`
 - `src/app/routes.tsx`
 ---
@@ -101,7 +101,7 @@ Archivo que edito el agente para implementar el frontend
 ---
 
 ## Paso 6 — Frontend: UI/UX adicional
-1. `Conexión de Dispositivos` (ya descrito en Paso 1).
+1. `Conexión de Dispositivos` (descrito en Paso 1 - *ELIMINADO como código obsoleto*).
 2. `Dashboard`: tras conexión mostrar tarjeta por WABA y botón `Sincronizar / Recuperar historial` (visible solo para Admins).
 3. `Directorio`: añadir filtro por agentes conectados via WABA; mostrar origen del contacto (WABA vs manual).
 4. Páginas de estado de onboarding: listar cuentas WABA registradas, estado (`pending`, `onboarded`, `failed`), últimos intentos y logs.

@@ -1,5 +1,21 @@
 # 🔐 Credenciales de Prueba
 
+## ⚠️ IMPORTANTE: Inicializar Base de Datos
+
+**Antes de intentar login, debes inicializar la base de datos ejecutando:**
+
+```bash
+# Opción 1: Desde terminal
+curl -X POST http://localhost:3000/api/database/bootstrap
+
+# Opción 2: Desde navegador
+Abre en navegador: http://localhost:3000/api/database/bootstrap
+```
+
+Esto creará todas las tablas y insertará el usuario admin.
+
+---
+
 ## Usuario Admin (Producción)
 
 | Campo | Valor |
@@ -12,9 +28,10 @@
 
 ### Cómo Usar
 
-1. Abre [http://localhost:5173](http://localhost:5173) en el navegador
-2. Ingresa las credenciales arriba en el formulario de login
-3. Acceso completo al dashboard y funcionalidades
+1. **Inicializa BD:** `curl -X POST http://localhost:3000/api/database/bootstrap`
+2. Abre [http://localhost:5173](http://localhost:5173) en el navegador
+3. Ingresa las credenciales arriba en el formulario de login
+4. Acceso completo al dashboard y funcionalidades
 
 ---
 
@@ -24,6 +41,7 @@
 - ✅ El hash se valida en el backend antes de crear sesión
 - ✅ La sesión se protege con JWT
 - ✅ El token se almacena en `localStorage` del navegador
+- ✅ Hash del admin: `$2b$10$hg4TvuIRgYqYhGHt5Yg4aesOkO907HPGOJ6eyjw4.PlfMyTcD4q/u` (contraseña: `secret`)
 
 ---
 
@@ -43,8 +61,8 @@ INSERT INTO users (
   'user-test-1', 
   'Usuario Prueba', 
   'test', 
-  '$2b$10$qcqISJoLWPKLqXHlKpGTkO0kVHN9gJZgBNg3HzKjQ0P7u6P6G4kMi',
-  'agent', 
+  '$2b$10$O6LVqMBb.LxMr9V9d3bh8uF5N5b5K8zY1LmLJx7v5d7K8p5R5y2jK',
+  'supervisor', 
   'active', 
   TRUE, 
   NOW()::TEXT, 
