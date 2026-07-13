@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import type { UserModel } from '../domain/models.js';
 import type { UserRepository } from '../domain/repositories.js';
 import { createAuditEntry, createRoleHistoryEntry } from './audit.js';
+import { getDatabaseClient } from '../infrastructure/database/connection.js';
 
 const hashToken = (token: string): string => crypto.createHash('sha256').update(token).digest('hex');
 
@@ -58,6 +59,19 @@ const passwordMatches = async (candidatePassword: string, storedPasswordHash: st
   return storedPasswordHash === candidatePassword;
 };
 
+const resolveActorUsername = async (repository: UserRepository, actorId: string): Promise<string> => {
+  if (!actorId || actorId === 'system') {
+    return actorId || 'system';
+  }
+
+  const actor = await repository.getUserById(actorId);
+  return actor?.username || actorId;
+};
+
+const resolveUserLabel = (user: Pick<UserModel, 'username' | 'fullName' | 'role'>): string => {
+  return user.role === 'agent' ? user.fullName : user.username;
+};
+
 export const createUser = async (
   repository: UserRepository,
   user: UserModel,
@@ -68,9 +82,17 @@ export const createUser = async (
 
   const passwordHash = await hashPasswordIfNeeded(user.passwordHash);
 
+  // Generate username for agents if empty
+  const roleLower = user.role?.toLowerCase?.();
+  const isAgent = roleLower === 'agente' || roleLower === 'agent';
+  const generatedUsername = !user.username || !user.username.trim() 
+    ? (isAgent ? `agent_${userId.replace(/[^a-z0-9]/g, '')}` : user.username)
+    : user.username;
+
   const userToCreate: UserModel = {
     ...user,
     id: userId,
+    username: generatedUsername,
     passwordHash,
     createdAt: user.createdAt || now,
     updatedAt: user.updatedAt || now,
@@ -78,8 +100,21 @@ export const createUser = async (
 
   const created = await repository.createUser(userToCreate);
 
+  // If the user is created with role "Agente" or "agent", also create an agent record
+  if (isAgent && created.id) {
+    const db = await getDatabaseClient();
+    await db.query(
+      'INSERT INTO agents (id, name, role, online) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
+      [created.id, created.fullName, 'agent', false]
+    );
+  }
+
+  const actorUsername = await resolveActorUsername(repository, actorId);
+
   const auditEntry = createAuditEntry('user', created.id, 'create_user', actorId, {
+    actorUsername,
     username: created.username,
+    fullName: created.fullName,
     role: created.role,
     accessToPanel: created.accessToPanel,
   });
@@ -113,6 +148,24 @@ export const changeUserRole = async (
     throw new Error('Failed to update role');
   }
 
+  // If the role is changed to "Agente", create or update the agent record
+  const roleLower = nextRole?.toLowerCase?.();
+  if ((roleLower === 'agente' || roleLower === 'agent') && updated.id) {
+    const db = await getDatabaseClient();
+    // Check if agent already exists
+    const existingAgent = await db.query('SELECT id FROM agents WHERE id = $1', [updated.id]);
+    
+    if (!existingAgent || existingAgent.length === 0) {
+      // Create new agent record
+      await db.query(
+        'INSERT INTO agents (id, name, role, online) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
+        [updated.id, updated.fullName, 'agent', false]
+      );
+    }
+  }
+
+  const actorUsername = await resolveActorUsername(repository, actorId);
+  const targetUserLabel = resolveUserLabel(updated);
   const roleHistoryEntry = createRoleHistoryEntry(updated.id, current.role, updated.role, actorId, 'Cambio de rol');
   await repository.createAuditLog({
     id: `audit-role-${updated.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -120,7 +173,13 @@ export const changeUserRole = async (
     entityId: updated.id,
     action: 'change_role',
     performedBy: actorId,
-    details: JSON.stringify({ previousRole: current.role, newRole: updated.role, historyId: roleHistoryEntry.id }),
+    details: JSON.stringify({
+      actorUsername,
+      targetUserLabel,
+      previousRole: current.role,
+      newRole: updated.role,
+      historyId: roleHistoryEntry.id,
+    }),
     createdAt: updated.updatedAt,
   });
 
@@ -146,6 +205,7 @@ export const updateUser = async (
   };
 
   const updated = await repository.updateUser(userToUpdate);
+  const actorUsername = await resolveActorUsername(repository, actorId);
 
   await repository.createAuditLog({
     id: `audit-update-${updated.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -153,7 +213,11 @@ export const updateUser = async (
     entityId: updated.id,
     action: 'update_user',
     performedBy: actorId,
-    details: JSON.stringify({ previousUsername: current.username, newUsername: updated.username }),
+    details: JSON.stringify({
+      actorUsername,
+      previousUsername: current.username,
+      newUsername: updated.username,
+    }),
     createdAt: updated.updatedAt,
   });
 
@@ -176,7 +240,12 @@ export const changeUserStatus = async (
     throw new Error('Failed to update status');
   }
 
-  const auditEntry = createAuditEntry('user', updated.id, 'change_status', actorId, { previousStatus: current.status, newStatus: updated.status });
+  const actorUsername = await resolveActorUsername(repository, actorId);
+  const auditEntry = createAuditEntry('user', updated.id, 'change_status', actorId, {
+    actorUsername,
+    previousStatus: current.status,
+    newStatus: updated.status,
+  });
   await repository.createAuditLog({
     id: auditEntry.id,
     entityType: auditEntry.entityType,
@@ -200,9 +269,13 @@ export const deleteUser = async (
     throw new Error('User not found');
   }
 
+  const actorUsername = await resolveActorUsername(repository, actorId);
+  const targetUserLabel = resolveUserLabel(current);
   await repository.deleteUser(userId);
 
   const auditEntry = createAuditEntry('user', userId, 'delete_user', actorId, {
+    actorUsername,
+    targetUserLabel,
     deletedUser: current.fullName,
     previousRole: current.role,
     previousStatus: current.status,

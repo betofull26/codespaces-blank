@@ -39,6 +39,10 @@ export async function fetchAgents(): Promise<Agent[]> {
   return requestApiData<Agent[]>('/agents');
 }
 
+export async function fetchAllContacts(): Promise<{ id: string; name: string; phone: string; createdAt: string; agentId: string | null }[]> {
+  return requestApiData('/contacts');
+}
+
 export async function fetchConversations(): Promise<Conversation[]> {
   return requestApiData<Conversation[]>('/conversations');
 }

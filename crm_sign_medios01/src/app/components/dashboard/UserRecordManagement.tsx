@@ -89,22 +89,17 @@ export function UserRecordManagement() {
   });
 
   const mergeRecordsWithBackendUsers = (storedRecords: UserRecord[], backendUsers: BackendUser[]) => {
+    // Map to store extra info from localStorage (position, phone, device, etc.)
     const byId = new Map(storedRecords.map((record) => [record.id, record]));
-    const byUsername = new Map(storedRecords.map((record) => [record.username.toLowerCase(), record]));
 
+    // Use backend users as source of truth for IDs and usernames
+    // Only use localStorage for additional fields like position, phone, device
     const mergedRecords = backendUsers.map((user) => {
-      const fallback = byId.get(user.id) ?? byUsername.get(user.username.toLowerCase());
-      return mapBackendUserToRecord(user, fallback);
+      const extraInfo = byId.get(user.id);
+      return mapBackendUserToRecord(user, extraInfo);
     });
 
-    const missingRecords = storedRecords.filter((record) => {
-      const existsInBackend = backendUsers.some(
-        (user) => user.id === record.id || user.username.toLowerCase() === record.username.toLowerCase(),
-      );
-      return !existsInBackend;
-    });
-
-    return [...mergedRecords, ...missingRecords];
+    return mergedRecords;
   };
 
   const buildPayload = (record: Omit<UserRecord, "id">) => ({
@@ -148,11 +143,25 @@ export function UserRecordManagement() {
     const role = currentRole;
     const payload = buildPayload(record);
 
+    // Check for duplicate username in current records
+    if (record.username && record.role !== "Agente") {
+      const usernameExists = records.some(
+        (r) => r.username.toLowerCase() === record.username.toLowerCase()
+      );
+      if (usernameExists) {
+        setStatusMessage(`❌ El usuario "${record.username}" ya existe en el sistema.`);
+        setIsSaving(false);
+        return;
+      }
+    }
+
     try {
       const created = await createUser(payload, role, currentUser?.id ?? "system");
-      const nextRecord: UserRecord = {
+      
+      // Save the full record with extra data to localStorage BEFORE refreshing
+      const completeRecord: UserRecord = {
         id: created.id,
-        name: created.fullName,
+        name: record.name,
         position: record.position,
         assignedPhone: record.assignedPhone,
         deviceModel: record.deviceModel,
@@ -160,15 +169,21 @@ export function UserRecordManagement() {
         serialNumber2: record.serialNumber2,
         photo: record.photo,
         entryDate: record.entryDate,
-        username: created.username,
+        username: record.username,
         password: record.password,
-        role: mapBackendRoleToRecordRole(created.role),
+        role: record.role,
       };
-
-      const nextRecords = [...records, nextRecord];
-      persistRecords(nextRecords);
+      
+      const updatedRecords = [...records, completeRecord];
+      persistRecords(updatedRecords);
+      
+      // Then refresh from backend to sync
+      const updatedUsers = await fetchUsers(role);
+      const mergedRecords = mergeRecordsWithBackendUsers(updatedRecords, updatedUsers);
+      persistRecords(mergedRecords);
+      
       setIsFormOpen(false);
-      showStatusMessage(`✓ Ficha creada correctamente. El usuario "${created.username}" ya puede iniciar sesión con la contraseña registrada.`, 5000);
+      showStatusMessage(`✓ Usuario registrado con éxito`, 5000);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Error desconocido";
       console.error("Error al crear ficha:", errorMsg);
@@ -192,17 +207,32 @@ export function UserRecordManagement() {
     const payload = buildPayload(record);
 
     try {
-      const updated = await updateUser(editingRecord.id, payload, role, currentUser?.id ?? "system");
-      const nextRecords = records.map((r) => (r.id === editingRecord.id ? {
-        ...r,
-        ...record,
+      await updateUser(editingRecord.id, payload, role, currentUser?.id ?? "system");
+      
+      // Save the full record with extra data to localStorage BEFORE refreshing
+      const completeRecord: UserRecord = {
         id: editingRecord.id,
-        name: updated.fullName,
-        username: updated.username,
+        name: record.name,
+        position: record.position,
+        assignedPhone: record.assignedPhone,
+        deviceModel: record.deviceModel,
+        serialNumber: record.serialNumber,
+        serialNumber2: record.serialNumber2,
+        photo: record.photo,
+        entryDate: record.entryDate,
+        username: record.username,
         password: record.password,
-        role: mapBackendRoleToRecordRole(updated.role),
-      } : r));
-      persistRecords(nextRecords);
+        role: record.role,
+      };
+      
+      const updatedRecords = records.map((r) => (r.id === editingRecord.id ? completeRecord : r));
+      persistRecords(updatedRecords);
+      
+      // Then refresh from backend to sync
+      const updatedUsers = await fetchUsers(role);
+      const mergedRecords = mergeRecordsWithBackendUsers(updatedRecords, updatedUsers);
+      persistRecords(mergedRecords);
+      
       setEditingRecord(null);
       setIsFormOpen(false);
       showStatusMessage("✓ Ficha actualizada correctamente", 3000);
@@ -226,8 +256,16 @@ export function UserRecordManagement() {
       const role = currentRole;
       try {
         await deleteUserById(id, role, currentUser?.id ?? "system");
-        const nextRecords = records.filter((record) => record.id !== id);
-        persistRecords(nextRecords);
+        
+        // Remove from localStorage first
+        const updatedRecords = records.filter((r) => r.id !== id);
+        persistRecords(updatedRecords);
+        
+        // Then refresh from backend to sync
+        const updatedUsers = await fetchUsers(role);
+        const mergedRecords = mergeRecordsWithBackendUsers(updatedRecords, updatedUsers);
+        persistRecords(mergedRecords);
+        
         showStatusMessage("✓ Ficha eliminada correctamente", 3000);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Error desconocido";

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { PostgresContactRepository } from '../../database/repositories.js';
 import { buildSuccessResponse, buildErrorResponse } from '../../../common/apiResponse.js';
-import { authenticateRequest } from '../middleware/authMiddleware.js';
+import { authenticateRequest, type AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { ensureAuthorized } from '../../../application/authorization.js';
 
 export const contactRouter = Router();
@@ -23,8 +23,8 @@ contactRouter.get('/agents/:agentId/contacts', async (req, res) => {
 // Create contact for an agent
 contactRouter.post('/agents/:agentId/contacts', async (req, res) => {
   try {
-    await authenticateRequest(req as any, res, async () => {
-      const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
+    await authenticateRequest(req as AuthenticatedRequest, res, async () => {
+      const role = ((req as AuthenticatedRequest).user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
       if (role === 'agent') {
         return res.status(403).json(buildErrorResponse('No tienes permisos para crear contactos', 'FORBIDDEN'));
       }
@@ -48,8 +48,8 @@ contactRouter.post('/agents/:agentId/contacts', async (req, res) => {
 // Create contact without requiring a WhatsApp account
 contactRouter.post('/contacts', async (req, res) => {
   try {
-    await authenticateRequest(req as any, res, async () => {
-      const role = (req.user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
+    await authenticateRequest(req as AuthenticatedRequest, res, async () => {
+      const role = ((req as AuthenticatedRequest).user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
       if (role === 'agent') {
         return res.status(403).json(buildErrorResponse('No tienes permisos para crear contactos', 'FORBIDDEN'));
       }

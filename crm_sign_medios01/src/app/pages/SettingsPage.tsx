@@ -3,7 +3,7 @@ import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
 import { UserRecordManagement } from "../components/dashboard/UserRecordManagement";
 import { getCurrentUser } from "../lib/auth";
-import { createBackup, downloadBackup, fetchAgents, fetchAgentConversations, fetchAuditLogs, fetchBackups, type AuditLogDto, type BackupRecordDto } from "../services/dashboardApi";
+import { createBackup, downloadBackup, fetchAgents, fetchAgentConversations, fetchAuditLogs, fetchBackups, fetchAllContacts, type AuditLogDto, type BackupRecordDto } from "../services/dashboardApi";
 import type { Agent, Conversation } from "../components/dashboard/types";
 import {
   Download, MessageSquare, Users, HardDrive, CheckCircle2, Loader2,
@@ -34,6 +34,13 @@ function timestamp() {
 }
 
 function formatActivityMessage(item: AuditLogDto): string {
+  const roleLabels: Record<string, string> = {
+    admin: "administrador",
+    supervisor: "supervisor",
+    agent: "agente",
+    agente: "agente",
+  };
+
   const actionLabels: Record<string, string> = {
     create_user: "creó un usuario",
     update_user: "actualizó un usuario",
@@ -50,34 +57,43 @@ function formatActivityMessage(item: AuditLogDto): string {
 
     switch (item.action) {
       case "create_user": {
+        const actorUsername = typeof details?.actorUsername === "string" ? details.actorUsername : item.performedBy;
         const username = typeof details?.username === "string" ? details.username : "un usuario";
+        const fullName = typeof details?.fullName === "string" ? details.fullName : "";
         const role = typeof details?.role === "string" ? details.role : "";
-        const accessToPanel = details?.accessToPanel === true;
-        const roleText = role ? ` con rol ${role}` : "";
-        const accessText = accessToPanel ? " y acceso al panel habilitado" : " y acceso al panel deshabilitado";
-        return `El usuario ${username}${roleText}${accessText}.`;
+        const isAgent = role === "agent" || role === "agente";
+        const createdUserLabel = isAgent && fullName ? fullName : username;
+        const normalizedRole = role ? (roleLabels[role] ?? role) : "";
+        const roleText = normalizedRole ? ` con rol ${normalizedRole}` : "";
+        return `${actorUsername} creó un usuario nuevo ${createdUserLabel}${roleText}.`;
       }
       case "update_user": {
-        const previousUsername = typeof details?.previousUsername === "string" ? details.previousUsername : "el usuario";
-        const newUsername = typeof details?.newUsername === "string" ? details.newUsername : "el usuario";
-        return `Actualizó la información de ${previousUsername} y la dejó como ${newUsername}.`;
+        const actorUsername = typeof details?.actorUsername === "string" ? details.actorUsername : item.performedBy;
+        return `${actorUsername} actualizó la información de una ficha de usuario.`;
       }
       case "delete_user": {
-        const deletedUser = typeof details?.deletedUser === "string" ? details.deletedUser : "un usuario";
-        return `Eliminó a ${deletedUser} del sistema.`;
+        const actorUsername = typeof details?.actorUsername === "string" ? details.actorUsername : item.performedBy;
+        const targetUserLabel = typeof details?.targetUserLabel === "string"
+          ? details.targetUserLabel
+          : (typeof details?.deletedUser === "string" ? details.deletedUser : "un usuario");
+        return `${actorUsername} eliminó a ${targetUserLabel}.`;
       }
       case "change_role": {
+        const actorUsername = typeof details?.actorUsername === "string" ? details.actorUsername : item.performedBy;
+        const targetUserLabel = typeof details?.targetUserLabel === "string" ? details.targetUserLabel : "un usuario";
         const previousRole = typeof details?.previousRole === "string" ? details.previousRole : "sin rol";
         const newRole = typeof details?.newRole === "string" ? details.newRole : "sin rol";
-        return `Cambié el rol de un usuario de ${previousRole} a ${newRole}.`;
+        return `${actorUsername} cambió el rol del usuario ${targetUserLabel} de ${previousRole} a ${newRole}.`;
       }
       case "change_status": {
+        const actorUsername = typeof details?.actorUsername === "string" ? details.actorUsername : item.performedBy;
         const previousStatus = typeof details?.previousStatus === "string" ? details.previousStatus : "desconocido";
         const newStatus = typeof details?.newStatus === "string" ? details.newStatus : "desconocido";
-        return `Cambié el estado de un usuario de ${previousStatus} a ${newStatus}.`;
+        return `${actorUsername} cambió el estado de un usuario de ${previousStatus} a ${newStatus}.`;
       }
       case "login": {
-        return "Inició sesión en el sistema.";
+        const username = typeof details?.username === "string" ? details.username : "un usuario";
+        return `${username} inició sesión en el sistema.`;
       }
       default:
         return `Realizó la acción: ${actionLabel}.`;
@@ -230,6 +246,7 @@ export function SettingsPage() {
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [selectedAgentConversations, setSelectedAgentConversations] = useState<Conversation[]>([]);
   const [history, setHistory] = useState<BackupRecord[]>([]);
+  const [contactsCount, setContactsCount] = useState<number>(0);
   const [activityLog, setActivityLog] = useState<AuditLogDto[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
@@ -303,6 +320,15 @@ export function SettingsPage() {
       active = false;
     };
   }, [isAuthorized, selectedAgentId]);
+
+  useEffect(() => {
+    if (!isAuthorized) return;
+    let active = true;
+    fetchAllContacts()
+      .then((rows) => { if (active) setContactsCount(rows.length); })
+      .catch(() => { /* non-critical */ });
+    return () => { active = false; };
+  }, [isAuthorized]);
 
   useEffect(() => {
     if (!isAuthorized) {
@@ -396,7 +422,7 @@ export function SettingsPage() {
     }
   };
 
-  const backupContactsCSV = async () => {
+  const backupContactsZip = async () => {
     if (isSupervisor) {
       setHistoryError("No tienes permisos para generar respaldos.");
       return;
@@ -412,7 +438,7 @@ export function SettingsPage() {
       anchor.click();
       URL.revokeObjectURL(url);
       setContactsStatus("done");
-      setHistory((current) => [{ label: "Respaldo de contactos (CSV)", time: timestamp(), type: "contacts" }, ...current]);
+      setHistory((current) => [{ label: "Respaldo de contactos (ZIP)", time: timestamp(), type: "contacts" }, ...current]);
       setTimeout(() => setContactsStatus("idle"), 3000);
     } catch (error) {
       setContactsStatus("error");
@@ -492,7 +518,7 @@ export function SettingsPage() {
                 <StatCard icon={<Users size={20} />}         label="Total de Agentes"  value={agents.length}   color="bg-blue-50 text-blue-600" />
                 <StatCard icon={<MessageSquare size={20} />} label="Conversaciones"    value={totalChats}           color="bg-emerald-50 text-emerald-600" />
                 <StatCard icon={<FileText size={20} />}      label="Mensajes totales"  value={totalMsgs}            color="bg-amber-50 text-amber-600" />
-                <StatCard icon={<Users size={20} />}         label="Contactos"         value={agents.length}  color="bg-purple-50 text-purple-600" />
+                <StatCard icon={<Users size={20} />}         label="Contactos"         value={contactsCount}  color="bg-purple-50 text-purple-600" />
               </div>
 
               <div className="grid gap-6 lg:grid-cols-3">
@@ -537,10 +563,10 @@ export function SettingsPage() {
                   <BackupCard
                     icon={<Users size={18} />}
                     title="Respaldo de Contactos"
-                    description="Exporta los contactos del respaldo generado por el backend."
-                    formats={["csv"]}
+                    description="Exporta los contactos del directorio en un archivo CSV dentro de un ZIP."
+                    formats={["zip"]}
                     status={contactsStatus}
-                    onBackupCSV={isSupervisor ? undefined : backupContactsCSV}
+                    onBackupZip={isSupervisor ? undefined : backupContactsZip}
                   />
 
                   {/* Full backup */}

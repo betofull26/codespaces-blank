@@ -5,6 +5,7 @@ import { getDatabaseClient } from './connection.js';
 export class PostgresAgentRepository implements AgentRepository {
   async list(): Promise<AgentModel[]> {
     const db = await getDatabaseClient();
+    // Get agents from the agents table - agents are created when users with role "Agente" are created/updated
     const rows = await db.query('SELECT id, name, role, phone, avatar, initials, online FROM agents ORDER BY name');
     return rows as AgentModel[];
   }
@@ -98,8 +99,18 @@ export class PostgresUserRepository implements UserRepository {
 
   async createUser(user: UserModel): Promise<UserModel> {
     const db = await getDatabaseClient();
+    // Check if username already exists - only for non-agent roles with non-empty username
+    if (user.username && user.username.trim() && user.role !== 'agent') {
+      const existingUserResult = await db.query(
+        'SELECT id FROM users WHERE LOWER(username) = LOWER($1)',
+        [user.username]
+      );
+      if (existingUserResult && existingUserResult.length > 0) {
+        throw new Error(`El usuario "${user.username}" ya existe en el sistema`);
+      }
+    }
     await db.query(
-      'INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (id) DO NOTHING',
+      'INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
       [user.id, user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
     );
     return user;

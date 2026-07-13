@@ -3,6 +3,7 @@ import { createBackup, downloadBackupFile, listBackups } from '../../../applicat
 import { ensureAuthorized } from '../../../application/authorization.js';
 import { buildErrorResponse, buildSuccessResponse } from '../../../common/apiResponse.js';
 import { authenticateRequest } from '../middleware/authMiddleware.js';
+import { getDatabaseClient } from '../../../infrastructure/database/connection.js';
 
 export const backupRouter = Router();
 
@@ -41,7 +42,24 @@ backupRouter.post('/backups', requireAdminForMutations, async (req, res) => {
   try {
     const backupType = typeof req.body?.backupType === 'string' ? req.body.backupType : 'chats';
     const agentId = typeof req.body?.agentId === 'string' ? req.body.agentId : undefined;
-    const backup = await createBackup(backupType, agentId);
+
+    // Resolve the full name of the session user to use as fallback in CSV
+    let actorName: string | undefined;
+    const userId = (req as any).user?.userId;
+    if (userId) {
+      try {
+        const db = await getDatabaseClient();
+        const rows = (await db.query(
+          `SELECT full_name FROM users WHERE id = $1`,
+          [userId],
+        )) as Array<{ full_name: string }>;
+        actorName = rows[0]?.full_name ?? undefined;
+      } catch {
+        // non-critical — leave actorName undefined
+      }
+    }
+
+    const backup = await createBackup(backupType, agentId, actorName);
     res.status(201).json(buildSuccessResponse(backup, 'Respaldo creado correctamente'));
   } catch (error) {
     res.status(500).json(buildErrorResponse('No se pudo crear el respaldo', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));

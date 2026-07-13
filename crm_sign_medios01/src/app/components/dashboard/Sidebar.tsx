@@ -160,7 +160,7 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
                 SM
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-800">{currentUser.title}</p>
+                <p className="truncate text-sm font-semibold text-slate-800">{currentUser.username}</p>
               </div>
             </button>
           </DropdownMenu.Trigger>

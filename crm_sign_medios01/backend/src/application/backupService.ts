@@ -58,6 +58,25 @@ const ensureBackupsDir = async (): Promise<void> => {
   await fs.mkdir(backupsDir, { recursive: true });
 };
 
+const formatBackupDate = (value: string): string => {
+  const date = new Date(value);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${day}/${month}/${year}`;
+};
+
+const formatBackupTime = (value: string): string => {
+  const date = new Date(value);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+const formatBackupMessageLine = (message: { sender: string; text: string; time: string }): string => {
+  return `${formatBackupDate(message.time)}, ${formatBackupTime(message.time)} - ${message.sender}: ${message.text}`;
+};
+
 const exportTableToCsv = async (tableName: string, query: string): Promise<string> => {
   const db = await getDatabaseClient();
   const rows = (await db.query(query)) as BackupExportEntry[];
@@ -94,54 +113,109 @@ const writeBackupArchive = async (fileName: string, data: Record<string, string>
   });
 };
 
-export const createBackup = async (backupType: string = 'chats', agentId?: string): Promise<BackupRecord> => {
+export const createBackup = async (backupType: string = 'chats', agentId?: string, actorName?: string): Promise<BackupRecord> => {
   const db = await getDatabaseClient();
   const createdAt = new Date().toISOString();
   const fileName = createBackupFileName(backupType);
 
   const exportSet: Record<string, string> = {};
-  // If an agentId is provided and backupType is 'chats', only export that agent's
-  // conversations as plain text files. Otherwise, export full CSVs and include
-  // per-conversation text files as before.
-  if (agentId && backupType === 'chats') {
-    const convRows = (await db.query(
-      `SELECT id, agent_id, client_name, topic, start_time FROM conversations WHERE agent_id = $1 ORDER BY start_time`,
-      [agentId],
-    )) as Array<{ id: string; agent_id: string; client_name: string; topic: string; start_time: string }>;
-
-    for (const conv of convRows) {
-      const messages = (await db.query(
-        'SELECT sender, text, time FROM messages WHERE conversation_id = $1 ORDER BY time',
-        [conv.id],
-      )) as Array<{ sender: string; text: string; time: string }>;
-
-      const header = [`Conversation: ${conv.id}`, `Client: ${conv.client_name}`, `AgentId: ${conv.agent_id}`, `Topic: ${conv.topic}`, `Start: ${conv.start_time}`, ''];
-      const lines = messages.map((m) => `[${m.time}] ${m.sender}: ${m.text}`);
-      const content = `${header.join('\n')}\n${lines.join('\n')}\n`;
-
-      const safeClient = conv.client_name ? conv.client_name.replace(/[^a-z0-9\-_. ]+/gi, '_').trim().replace(/\s+/g, '_') : 'unknown_client';
-      const safeId = conv.id.replace(/[^a-z0-9\-_.]/gi, '_');
-      exportSet[`conversations/${safeClient}/${safeId}.txt`] = content;
-    }
-  } else {
-    for (const [name, config] of Object.entries(backupExportQueries)) {
-      exportSet[`${name}.csv`] = await exportTableToCsv(name, config.sql);
+  
+  if (backupType === 'chats') {
+    // Export chats in hierarchical structure: AgentFolder/ConversationFile.txt
+    let agents: Array<{ id: string; name: string }>;
+    
+    if (agentId) {
+      // If agentId is provided, only get that agent
+      agents = (await db.query(
+        `SELECT id, name FROM agents WHERE id = $1`,
+        [agentId],
+      )) as Array<{ id: string; name: string }>;
+    } else {
+      // Otherwise, get all agents
+      agents = (await db.query(
+        `SELECT id, name FROM agents ORDER BY name`,
+      )) as Array<{ id: string; name: string }>;
     }
 
-    const convRows = (await db.query(`SELECT id, agent_id, client_name, topic, start_time FROM conversations ORDER BY start_time`)) as Array<{ id: string; agent_id: string; client_name: string; topic: string; start_time: string }>;
-    for (const conv of convRows) {
-      const messages = (await db.query(
-        'SELECT sender, text, time FROM messages WHERE conversation_id = $1 ORDER BY time',
-        [conv.id],
-      )) as Array<{ sender: string; text: string; time: string }>;
+    for (const agent of agents) {
+      const convRows = (await db.query(
+        `SELECT id, agent_id, client_name, topic, start_time FROM conversations WHERE agent_id = $1 ORDER BY start_time`,
+        [agent.id],
+      )) as Array<{ id: string; agent_id: string; client_name: string; topic: string; start_time: string }>;
 
-      const header = [`Conversation: ${conv.id}`, `Client: ${conv.client_name}`, `AgentId: ${conv.agent_id}`, `Topic: ${conv.topic}`, `Start: ${conv.start_time}`, ''];
-      const lines = messages.map((m) => `[${m.time}] ${m.sender}: ${m.text}`);
-      const content = `${header.join('\n')}\n${lines.join('\n')}\n`;
+      for (const conv of convRows) {
+        const messages = (await db.query(
+          'SELECT sender, text, time FROM messages WHERE conversation_id = $1 ORDER BY time',
+          [conv.id],
+        )) as Array<{ sender: string; text: string; time: string }>;
 
-      const safeClient = conv.client_name ? conv.client_name.replace(/[^a-z0-9\-_. ]+/gi, '_').trim().replace(/\s+/g, '_') : 'unknown_client';
-      const safeId = conv.id.replace(/[^a-z0-9\-_.]/gi, '_');
-      exportSet[`conversations/${safeClient}/${safeId}.txt`] = content;
+        const content = `${messages.map((message) => formatBackupMessageLine(message)).join('\n\n')}\n`;
+
+        // Safe folder and file names
+        const safeAgentName = agent.name.replace(/[^a-z0-9\-_. ]+/gi, '_').trim().replace(/\s+/g, '_');
+        const safeClient = conv.client_name ? conv.client_name.replace(/[^a-z0-9\-_. ]+/gi, '_').trim().replace(/\s+/g, '_') : 'unknown_client';
+        const safeId = conv.id.replace(/[^a-z0-9\-_.]/gi, '_');
+        exportSet[`${safeAgentName}/${safeClient}_${safeId}.txt`] = content;
+      }
+    }
+  } else if (backupType === 'contacts') {
+    // Export contacts joined with agent name; fall back to actorName when no agent assigned
+    const contactRows = (await db.query(
+      `SELECT
+         COALESCE(a.name, $1) AS nombre_usuario,
+         c.phone              AS telefono_cliente,
+         c.name               AS nombre_cliente
+       FROM contacts c
+       LEFT JOIN agents a ON a.id = c.agent_id
+       ORDER BY c.name`,
+      [actorName ?? ''],
+    )) as BackupExportEntry[];
+
+    const headers = ['nombre_usuario', 'nombre_cliente', 'telefono_cliente'];
+    exportSet['contacts.csv'] = buildCsvContent(contactRows, headers);
+  } else if (backupType === 'full') {
+    // Full backup: contacts.csv + agent folders with conversations
+    
+    // 1. Export all contacts to CSV
+    const contactRows = (await db.query(
+      `SELECT
+         COALESCE(a.name, $1) AS nombre_usuario,
+         c.phone              AS telefono_cliente,
+         c.name               AS nombre_cliente
+       FROM contacts c
+       LEFT JOIN agents a ON a.id = c.agent_id
+       ORDER BY c.name`,
+      [actorName ?? ''],
+    )) as BackupExportEntry[];
+
+    const headers = ['nombre_usuario', 'nombre_cliente', 'telefono_cliente'];
+    exportSet['contacts.csv'] = buildCsvContent(contactRows, headers);
+
+    // 2. Export chats in hierarchical structure: AgentFolder/ConversationFile.txt
+    const agents = (await db.query(
+      `SELECT id, name FROM agents ORDER BY name`,
+    )) as Array<{ id: string; name: string }>;
+
+    for (const agent of agents) {
+      const convRows = (await db.query(
+        `SELECT id, agent_id, client_name, topic, start_time FROM conversations WHERE agent_id = $1 ORDER BY start_time`,
+        [agent.id],
+      )) as Array<{ id: string; agent_id: string; client_name: string; topic: string; start_time: string }>;
+
+      for (const conv of convRows) {
+        const messages = (await db.query(
+          'SELECT sender, text, time FROM messages WHERE conversation_id = $1 ORDER BY time',
+          [conv.id],
+        )) as Array<{ sender: string; text: string; time: string }>;
+
+        const content = `${messages.map((message) => formatBackupMessageLine(message)).join('\n\n')}\n`;
+
+        // Safe folder and file names
+        const safeAgentName = agent.name.replace(/[^a-z0-9\-_. ]+/gi, '_').trim().replace(/\s+/g, '_');
+        const safeClient = conv.client_name ? conv.client_name.replace(/[^a-z0-9\-_. ]+/gi, '_').trim().replace(/\s+/g, '_') : 'unknown_client';
+        const safeId = conv.id.replace(/[^a-z0-9\-_.]/gi, '_');
+        exportSet[`${safeAgentName}/${safeClient}_${safeId}.txt`] = content;
+      }
     }
   }
 
