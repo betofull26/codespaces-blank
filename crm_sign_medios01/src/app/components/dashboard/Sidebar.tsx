@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Home, BookUser, FileText, LogOut, SlidersHorizontal, MessageSquare } from "lucide-react";
+import { Home, BookUser, FileText, LogOut, SlidersHorizontal, MessageSquare, Smartphone, Users } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { AuthUser, clearCurrentUser, getCurrentUser } from "../../lib/auth";
@@ -8,10 +8,9 @@ import companyLogo from "../../../imports/IMG_20260602_130639_278.jpg";
 
 interface SidebarProps {
   selectedNode: string;
-  onSelectNode: (nodeId: string) => void;
 }
 
-export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
+export function Sidebar({ selectedNode }: SidebarProps) {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
 
@@ -126,6 +125,50 @@ export function Sidebar({ selectedNode, onSelectNode }: SidebarProps) {
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
             )}
           </div>
+
+          {/* Gestion de fichas - Solo Admin/Supervisor */}
+          {isAdminOrSupervisor && (
+            <div
+              className={[
+                "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
+                selectedNode === "gestion-fichas"
+                  ? "bg-blue-50 font-semibold text-blue-700"
+                  : "text-slate-700 hover:bg-slate-100",
+              ].join(" ")}
+              onClick={() => navigate("/gestion-fichas")}
+            >
+              <Users
+                size={18}
+                className={selectedNode === "gestion-fichas" ? "text-blue-600" : "text-slate-500"}
+              />
+              <span className="flex-1 truncate">Gestión de fichas</span>
+              {selectedNode === "gestion-fichas" && (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+              )}
+            </div>
+          )}
+
+          {/* Conexion de dispositivo - Solo Admin/Supervisor */}
+          {isAdminOrSupervisor && (
+            <div
+              className={[
+                "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all",
+                selectedNode === "conexion-dispositivo"
+                  ? "bg-blue-50 font-semibold text-blue-700"
+                  : "text-slate-700 hover:bg-slate-100",
+              ].join(" ")}
+              onClick={() => navigate("/conexion-dispositivo")}
+            >
+              <Smartphone
+                size={18}
+                className={selectedNode === "conexion-dispositivo" ? "text-blue-600" : "text-slate-500"}
+              />
+              <span className="flex-1 truncate">Conexion de dispositivo</span>
+              {selectedNode === "conexion-dispositivo" && (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+              )}
+            </div>
+          )}
 
           {/* Ajustes - Solo Admin/Supervisor */}
           {isAdminOrSupervisor && (

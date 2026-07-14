@@ -5,6 +5,7 @@ import { UserManagementPage } from "./pages/UserManagementPage";
 import { DirectorioPage } from "./pages/DirectorioPage";
 import { PlantilladasPage } from "./pages/PlantilladasPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { DeviceConnectionPage } from "./pages/DeviceConnectionPage";
 import { clearCurrentUser, getCurrentUser, isSessionExpired } from "./lib/auth";
 
 const requireAuth = () => {
@@ -65,6 +66,11 @@ export const router = createBrowserRouter([
   {
     path: "/ajustes",
     Component: SettingsPage,
+    loader: requireAdminOrSupervisor,
+  },
+  {
+    path: "/conexion-dispositivo",
+    Component: DeviceConnectionPage,
     loader: requireAdminOrSupervisor,
   },
 ]);

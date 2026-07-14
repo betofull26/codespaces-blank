@@ -479,7 +479,7 @@ export function SettingsPage() {
   /* ══ RENDER ══ */
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar selectedNode="ajustes" onSelectNode={() => {}} />
+      <Sidebar selectedNode="ajustes" />
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <DashboardHeader />
@@ -514,8 +514,7 @@ export function SettingsPage() {
           ════════════════════════════════════════ */}
           {activeTab === "backup" && (
             <>
-              <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard icon={<Users size={20} />}         label="Total de Agentes"  value={agents.length}   color="bg-blue-50 text-blue-600" />
+              <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <StatCard icon={<MessageSquare size={20} />} label="Conversaciones"    value={totalChats}           color="bg-emerald-50 text-emerald-600" />
                 <StatCard icon={<FileText size={20} />}      label="Mensajes totales"  value={totalMsgs}            color="bg-amber-50 text-amber-600" />
                 <StatCard icon={<Users size={20} />}         label="Contactos"         value={contactsCount}  color="bg-purple-50 text-purple-600" />

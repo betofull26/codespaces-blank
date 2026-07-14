@@ -2,8 +2,8 @@ import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
 import { getCurrentUser } from "../lib/auth";
 import { useEffect, useState } from "react";
-import { UserPlus } from "lucide-react";
-import { fetchAgents, fetchContacts, createContact } from "../services/dashboardApi";
+import { UserPlus, Pencil, Trash2 } from "lucide-react";
+import { fetchAgents, fetchContacts, createContact, updateContact, deleteContact } from "../services/dashboardApi";
 import type { Agent } from "../components/dashboard/types";
 
 export function DirectorioPage() {
@@ -14,6 +14,7 @@ export function DirectorioPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
 
@@ -41,8 +42,16 @@ export function DirectorioPage() {
 
   const cancelAddContact = () => {
     setShowAddForm(false);
+    setEditingContactId(null);
     setNewContactName('');
     setNewContactPhone('');
+  };
+
+  const startEditContact = (contactId: string, name: string, phone: string) => {
+    setEditingContactId(contactId);
+    setNewContactName(name);
+    setNewContactPhone(phone);
+    setShowAddForm(true);
   };
 
   const saveContact = async () => {
@@ -52,15 +61,31 @@ export function DirectorioPage() {
     }
 
     try {
-      await createContact(newContactName.trim(), newContactPhone.trim());
+      if (editingContactId) {
+        await updateContact(editingContactId, newContactName.trim(), newContactPhone.trim());
+      } else {
+        await createContact(newContactName.trim(), newContactPhone.trim());
+      }
       const updated = await fetchContacts();
       setContacts(updated);
       setNewContactName('');
       setNewContactPhone('');
       setShowAddForm(false);
-      alert('Contacto añadido');
+      setEditingContactId(null);
+      alert(editingContactId ? 'Contacto actualizado' : 'Contacto añadido');
     } catch (err) {
-      alert('No se pudo añadir el contacto');
+      alert(editingContactId ? 'No se pudo actualizar el contacto' : 'No se pudo añadir el contacto');
+    }
+  };
+
+  const removeContact = async (contactId: string) => {
+    if (!confirm('¿Seguro que deseas eliminar este contacto?')) return;
+    try {
+      await deleteContact(contactId);
+      const updated = await fetchContacts();
+      setContacts(updated);
+    } catch {
+      alert('No se pudo eliminar el contacto');
     }
   };
 
@@ -84,7 +109,7 @@ export function DirectorioPage() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar selectedNode="directorio" onSelectNode={() => {}} />
+      <Sidebar selectedNode="directorio" />
       <div className="flex flex-1 flex-col overflow-hidden">
         <DashboardHeader />
         <main className="flex-1 overflow-y-auto px-6 py-5">
@@ -178,13 +203,31 @@ export function DirectorioPage() {
                 <p className="text-sm text-slate-400">No hay contactos que coincidan.</p>
               ) : (
                 filteredContacts.map((contact) => (
-                  <div key={`${contact.agentId}-${contact.id}`} className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 sm:grid-cols-[2fr_1fr_1fr]">
+                  <div key={`${contact.agentId}-${contact.id}`} className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-center">
                     <div>
                       <p className="font-medium text-slate-800">{contact.name}</p>
                       <p className="text-xs text-slate-500">{contact.agentName}</p>
                     </div>
                     <p className="text-sm text-slate-700">{contact.phone}</p>
                     <p className="text-sm text-slate-700">{contact.agentPhone}</p>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 transition hover:bg-amber-200"
+                        onClick={() => startEditContact(contact.id, contact.name, contact.phone)}
+                        aria-label="Editar contacto"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-700 transition hover:bg-red-200"
+                        onClick={() => removeContact(contact.id)}
+                        aria-label="Eliminar contacto"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

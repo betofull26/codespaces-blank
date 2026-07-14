@@ -202,4 +202,18 @@ export class PostgresContactRepository implements ContactRepository {
     await db.query('INSERT INTO contacts (id, agent_id, name, phone, created_at) VALUES ($1, $2, $3, $4, $5)', [id, agentId, name, phone, createdAt]);
     return { id, agentId, name, phone, createdAt };
   }
+
+  async update(contactId: string, name: string, phone: string): Promise<{ id: string; agentId: string | null; name: string; phone: string; createdAt: string }> {
+    const db = await getDatabaseClient();
+    const rows = await db.query(
+      'UPDATE contacts SET name = $1, phone = $2 WHERE id = $3 RETURNING id, agent_id AS "agentId", name, phone, created_at AS "createdAt"',
+      [name, phone, contactId],
+    );
+    return (rows[0] as { id: string; agentId: string | null; name: string; phone: string; createdAt: string } | undefined) ?? { id: contactId, agentId: null, name, phone, createdAt: new Date().toISOString() };
+  }
+
+  async delete(contactId: string): Promise<void> {
+    const db = await getDatabaseClient();
+    await db.query('DELETE FROM contacts WHERE id = $1', [contactId]);
+  }
 }

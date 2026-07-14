@@ -140,6 +140,19 @@ export async function createContact(name: string, phone: string, agentId?: strin
   });
 }
 
+export async function updateContact(contactId: string, name: string, phone: string) {
+  return requestApiData(`/contacts/${encodeURIComponent(contactId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name, phone }),
+  });
+}
+
+export async function deleteContact(contactId: string) {
+  return requestApiData(`/contacts/${encodeURIComponent(contactId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function createContactForAgent(agentId: string, name: string, phone: string) {
   return requestApiData(`/agents/${encodeURIComponent(agentId)}/contacts`, {
     method: 'POST',

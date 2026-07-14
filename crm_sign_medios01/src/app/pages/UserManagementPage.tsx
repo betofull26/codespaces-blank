@@ -30,7 +30,7 @@ export function UserManagementPage() {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Sidebar */}
-      <Sidebar selectedNode="gestion-fichas" onSelectNode={() => {}} />
+      <Sidebar selectedNode="gestion-fichas" />
 
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">

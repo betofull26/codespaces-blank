@@ -71,6 +71,48 @@ contactRouter.post('/contacts', async (req, res) => {
   }
 });
 
+contactRouter.put('/contacts/:contactId', async (req, res) => {
+  try {
+    await authenticateRequest(req as AuthenticatedRequest, res, async () => {
+      const role = ((req as AuthenticatedRequest).user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
+      if (role === 'agent') {
+        return res.status(403).json(buildErrorResponse('No tienes permisos para editar contactos', 'FORBIDDEN'));
+      }
+
+      const contactId = Array.isArray(req.params.contactId) ? req.params.contactId[0] : req.params.contactId;
+      const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+      const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+      if (!name || !phone) {
+        return res.status(400).json(buildErrorResponse('Invalid payload', 'INVALID_PAYLOAD'));
+      }
+
+      const repo = new PostgresContactRepository();
+      const updated = await repo.update(contactId, name, phone);
+      res.json(buildSuccessResponse(updated, 'Contact updated'));
+    });
+  } catch (error) {
+    res.status(500).json(buildErrorResponse('Could not update contact', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));
+  }
+});
+
+contactRouter.delete('/contacts/:contactId', async (req, res) => {
+  try {
+    await authenticateRequest(req as AuthenticatedRequest, res, async () => {
+      const role = ((req as AuthenticatedRequest).user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
+      if (role === 'agent') {
+        return res.status(403).json(buildErrorResponse('No tienes permisos para eliminar contactos', 'FORBIDDEN'));
+      }
+
+      const contactId = Array.isArray(req.params.contactId) ? req.params.contactId[0] : req.params.contactId;
+      const repo = new PostgresContactRepository();
+      await repo.delete(contactId);
+      res.json(buildSuccessResponse({ id: contactId }, 'Contact deleted'));
+    });
+  } catch (error) {
+    res.status(500).json(buildErrorResponse('Could not delete contact', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));
+  }
+});
+
 // List all contacts
 contactRouter.get('/contacts', async (req, res) => {
   try {
