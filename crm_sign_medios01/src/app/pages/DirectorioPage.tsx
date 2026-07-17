@@ -10,13 +10,15 @@ export function DirectorioPage() {
   const currentUser = getCurrentUser();
   const isSupervisor = currentUser?.role === "supervisor";
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [contacts, setContacts] = useState<{ id: string; name: string; phone: string; createdAt: string; agentId: string | null }[]>([]);
+  const [contacts, setContacts] = useState<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; agentId: string | null }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactCompany, setNewContactCompany] = useState('');
+  const [newContactPosition, setNewContactPosition] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -45,12 +47,16 @@ export function DirectorioPage() {
     setEditingContactId(null);
     setNewContactName('');
     setNewContactPhone('');
+    setNewContactCompany('');
+    setNewContactPosition('');
   };
 
-  const startEditContact = (contactId: string, name: string, phone: string) => {
+  const startEditContact = (contactId: string, name: string, phone: string, company: string | null, position: string | null) => {
     setEditingContactId(contactId);
     setNewContactName(name);
     setNewContactPhone(phone);
+    setNewContactCompany(company ?? '');
+    setNewContactPosition(position ?? '');
     setShowAddForm(true);
   };
 
@@ -62,14 +68,16 @@ export function DirectorioPage() {
 
     try {
       if (editingContactId) {
-        await updateContact(editingContactId, newContactName.trim(), newContactPhone.trim());
+        await updateContact(editingContactId, newContactName.trim(), newContactPhone.trim(), newContactCompany.trim(), newContactPosition.trim());
       } else {
-        await createContact(newContactName.trim(), newContactPhone.trim());
+        await createContact(newContactName.trim(), newContactPhone.trim(), newContactCompany.trim(), newContactPosition.trim());
       }
       const updated = await fetchContacts();
       setContacts(updated);
       setNewContactName('');
       setNewContactPhone('');
+      setNewContactCompany('');
+      setNewContactPosition('');
       setShowAddForm(false);
       setEditingContactId(null);
       alert(editingContactId ? 'Contacto actualizado' : 'Contacto añadido');
@@ -102,7 +110,7 @@ export function DirectorioPage() {
 
   const filteredContacts = combinedContacts.filter((contact) => {
     const q = searchTerm.trim().toLowerCase();
-    const matchesSearch = !q || contact.name.toLowerCase().includes(q) || contact.phone.includes(q);
+    const matchesSearch = !q || contact.name.toLowerCase().includes(q) || contact.phone.includes(q) || (contact.company ?? '').toLowerCase().includes(q) || (contact.position ?? '').toLowerCase().includes(q);
     const matchesAgent = !selectedAgentId || contact.agentId === selectedAgentId;
     return matchesSearch && matchesAgent;
   });
@@ -121,7 +129,7 @@ export function DirectorioPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <input
                 type="text"
-                placeholder="Buscar contactos por nombre o teléfono..."
+                placeholder="🔍 Buscar contacto por nombre"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
@@ -172,6 +180,24 @@ export function DirectorioPage() {
                     className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
                   />
                 </label>
+                <label className="flex flex-col gap-2 text-sm text-slate-700">
+                  Empresa
+                  <input
+                    type="text"
+                    value={newContactCompany}
+                    onChange={(e) => setNewContactCompany(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-sm text-slate-700">
+                  Cargo
+                  <input
+                    type="text"
+                    value={newContactPosition}
+                    onChange={(e) => setNewContactPosition(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
+                  />
+                </label>
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button
@@ -206,6 +232,11 @@ export function DirectorioPage() {
                   <div key={`${contact.agentId}-${contact.id}`} className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-center">
                     <div>
                       <p className="font-medium text-slate-800">{contact.name}</p>
+                      {(contact.company || contact.position) && (
+                        <p className="text-xs text-slate-500">
+                          {[contact.company, contact.position].filter(Boolean).join(' - ')}
+                        </p>
+                      )}
                       <p className="text-xs text-slate-500">{contact.agentName}</p>
                     </div>
                     <p className="text-sm text-slate-700">{contact.phone}</p>
@@ -214,7 +245,7 @@ export function DirectorioPage() {
                       <button
                         type="button"
                         className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 transition hover:bg-amber-200"
-                        onClick={() => startEditContact(contact.id, contact.name, contact.phone)}
+                        onClick={() => startEditContact(contact.id, contact.name, contact.phone, contact.company, contact.position)}
                         aria-label="Editar contacto"
                       >
                         <Pencil size={14} />

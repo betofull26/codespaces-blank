@@ -183,33 +183,33 @@ export class PostgresUserRepository implements UserRepository {
 }
 
 export class PostgresContactRepository implements ContactRepository {
-  async listByAgent(agentId: string): Promise<{ id: string; name: string; phone: string; createdAt: string }[]> {
+  async listByAgent(agentId: string): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[]> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, name, phone, created_at AS "createdAt" FROM contacts WHERE agent_id = $1 ORDER BY created_at DESC', [agentId]);
-    return rows as { id: string; name: string; phone: string; createdAt: string }[];
+    const rows = await db.query('SELECT id, name, phone, company, position, created_at AS "createdAt" FROM contacts WHERE agent_id = $1 ORDER BY created_at DESC', [agentId]);
+    return rows as { id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[];
   }
 
-  async listAllContacts(): Promise<{ id: string; name: string; phone: string; createdAt: string; agentId: string | null }[]> {
+  async listAllContacts(): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; agentId: string | null }[]> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, agent_id AS "agentId", name, phone, created_at AS "createdAt" FROM contacts ORDER BY created_at DESC');
-    return rows as { id: string; name: string; phone: string; createdAt: string; agentId: string | null }[];
+    const rows = await db.query('SELECT id, agent_id AS "agentId", name, phone, company, position, created_at AS "createdAt" FROM contacts ORDER BY created_at DESC');
+    return rows as { id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; agentId: string | null }[];
   }
 
-  async create(agentId: string | null, name: string, phone: string): Promise<{ id: string; agentId: string | null; name: string; phone: string; createdAt: string }> {
+  async create(agentId: string | null, name: string, phone: string, company: string | null, position: string | null): Promise<{ id: string; agentId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }> {
     const db = await getDatabaseClient();
     const id = `contact-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
     const createdAt = new Date().toISOString();
-    await db.query('INSERT INTO contacts (id, agent_id, name, phone, created_at) VALUES ($1, $2, $3, $4, $5)', [id, agentId, name, phone, createdAt]);
-    return { id, agentId, name, phone, createdAt };
+    await db.query('INSERT INTO contacts (id, agent_id, name, phone, company, position, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)', [id, agentId, name, phone, company, position, createdAt]);
+    return { id, agentId, name, phone, company, position, createdAt };
   }
 
-  async update(contactId: string, name: string, phone: string): Promise<{ id: string; agentId: string | null; name: string; phone: string; createdAt: string }> {
+  async update(contactId: string, name: string, phone: string, company: string | null, position: string | null): Promise<{ id: string; agentId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }> {
     const db = await getDatabaseClient();
     const rows = await db.query(
-      'UPDATE contacts SET name = $1, phone = $2 WHERE id = $3 RETURNING id, agent_id AS "agentId", name, phone, created_at AS "createdAt"',
-      [name, phone, contactId],
+      'UPDATE contacts SET name = $1, phone = $2, company = $3, position = $4 WHERE id = $5 RETURNING id, agent_id AS "agentId", name, phone, company, position, created_at AS "createdAt"',
+      [name, phone, company, position, contactId],
     );
-    return (rows[0] as { id: string; agentId: string | null; name: string; phone: string; createdAt: string } | undefined) ?? { id: contactId, agentId: null, name, phone, createdAt: new Date().toISOString() };
+    return (rows[0] as { id: string; agentId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string } | undefined) ?? { id: contactId, agentId: null, name, phone, company, position, createdAt: new Date().toISOString() };
   }
 
   async delete(contactId: string): Promise<void> {

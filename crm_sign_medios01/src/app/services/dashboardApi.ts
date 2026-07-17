@@ -39,7 +39,7 @@ export async function fetchAgents(): Promise<Agent[]> {
   return requestApiData<Agent[]>('/agents');
 }
 
-export async function fetchAllContacts(): Promise<{ id: string; name: string; phone: string; createdAt: string; agentId: string | null }[]> {
+export async function fetchAllContacts(): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; agentId: string | null }[]> {
   return requestApiData('/contacts');
 }
 
@@ -125,25 +125,25 @@ export async function fetchBackups(): Promise<BackupRecordDto[]> {
   return requestApiData<BackupRecordDto[]>('/backups');
 }
 
-export async function fetchContactsByAgent(agentId: string): Promise<{ id: string; name: string; phone: string; createdAt: string }[]> {
+export async function fetchContactsByAgent(agentId: string): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[]> {
   return requestApiData(`/agents/${encodeURIComponent(agentId)}/contacts`);
 }
 
-export async function fetchContacts(): Promise<{ id: string; agentId: string | null; name: string; phone: string; createdAt: string }[]> {
+export async function fetchContacts(): Promise<{ id: string; agentId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[]> {
   return requestApiData('/contacts');
 }
 
-export async function createContact(name: string, phone: string, agentId?: string) {
+export async function createContact(name: string, phone: string, company?: string, position?: string, agentId?: string) {
   return requestApiData('/contacts', {
     method: 'POST',
-    body: JSON.stringify({ name, phone, agentId }),
+    body: JSON.stringify({ name, phone, company, position, agentId }),
   });
 }
 
-export async function updateContact(contactId: string, name: string, phone: string) {
+export async function updateContact(contactId: string, name: string, phone: string, company?: string, position?: string) {
   return requestApiData(`/contacts/${encodeURIComponent(contactId)}`, {
     method: 'PUT',
-    body: JSON.stringify({ name, phone }),
+    body: JSON.stringify({ name, phone, company, position }),
   });
 }
 
@@ -153,10 +153,10 @@ export async function deleteContact(contactId: string) {
   });
 }
 
-export async function createContactForAgent(agentId: string, name: string, phone: string) {
+export async function createContactForAgent(agentId: string, name: string, phone: string, company?: string, position?: string) {
   return requestApiData(`/agents/${encodeURIComponent(agentId)}/contacts`, {
     method: 'POST',
-    body: JSON.stringify({ name, phone }),
+    body: JSON.stringify({ name, phone, company, position }),
   });
 }
 

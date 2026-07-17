@@ -32,12 +32,14 @@ contactRouter.post('/agents/:agentId/contacts', async (req, res) => {
       const agentId = Array.isArray(req.params.agentId) ? req.params.agentId[0] : req.params.agentId;
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+      const company = typeof req.body?.company === 'string' ? req.body.company.trim() : '';
+      const position = typeof req.body?.position === 'string' ? req.body.position.trim() : '';
       if (!name || !phone) {
         return res.status(400).json(buildErrorResponse('Invalid payload', 'INVALID_PAYLOAD'));
       }
 
       const repo = new PostgresContactRepository();
-      const created = await repo.create(agentId, name, phone);
+      const created = await repo.create(agentId, name, phone, company || null, position || null);
       res.status(201).json(buildSuccessResponse(created, 'Contact created'));
     });
   } catch (error) {
@@ -58,12 +60,14 @@ contactRouter.post('/contacts', async (req, res) => {
       const agentId = rawAgentId || null;
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+      const company = typeof req.body?.company === 'string' ? req.body.company.trim() : '';
+      const position = typeof req.body?.position === 'string' ? req.body.position.trim() : '';
       if (!name || !phone) {
         return res.status(400).json(buildErrorResponse('Invalid payload', 'INVALID_PAYLOAD'));
       }
 
       const repo = new PostgresContactRepository();
-      const created = await repo.create(agentId, name, phone);
+      const created = await repo.create(agentId, name, phone, company || null, position || null);
       res.status(201).json(buildSuccessResponse(created, 'Contact created'));
     });
   } catch (error) {
@@ -82,12 +86,14 @@ contactRouter.put('/contacts/:contactId', async (req, res) => {
       const contactId = Array.isArray(req.params.contactId) ? req.params.contactId[0] : req.params.contactId;
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+      const company = typeof req.body?.company === 'string' ? req.body.company.trim() : '';
+      const position = typeof req.body?.position === 'string' ? req.body.position.trim() : '';
       if (!name || !phone) {
         return res.status(400).json(buildErrorResponse('Invalid payload', 'INVALID_PAYLOAD'));
       }
 
       const repo = new PostgresContactRepository();
-      const updated = await repo.update(contactId, name, phone);
+      const updated = await repo.update(contactId, name, phone, company || null, position || null);
       res.json(buildSuccessResponse(updated, 'Contact updated'));
     });
   } catch (error) {

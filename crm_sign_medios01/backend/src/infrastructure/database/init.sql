@@ -88,9 +88,14 @@ CREATE TABLE IF NOT EXISTS contacts (
   agent_id TEXT,
   name TEXT NOT NULL,
   phone TEXT NOT NULL,
+  company TEXT,
+  position TEXT,
   created_at TEXT NOT NULL,
   CONSTRAINT fk_contacts_agent FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
+
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS position TEXT;
 
 CREATE TABLE IF NOT EXISTS user_sessions (
   id TEXT PRIMARY KEY,
