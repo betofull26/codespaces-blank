@@ -63,6 +63,41 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS auth_users (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+  username TEXT UNIQUE,
+  password_hash TEXT,
+  role TEXT NOT NULL DEFAULT 'agent',
+  status TEXT NOT NULL DEFAULT 'active',
+  access_to_panel BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+  CONSTRAINT fk_auth_users_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS devices (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+  brand_model TEXT NOT NULL,
+  serial_number_1 TEXT NOT NULL UNIQUE,
+  serial_number_2 TEXT,
+  assigned_phone TEXT NOT NULL UNIQUE,
+  CONSTRAINT fk_devices_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS media_files (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  file_size INTEGER,
+  created_at TEXT NOT NULL,
+  CONSTRAINT fk_media_files_message FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   entity_type TEXT NOT NULL,
@@ -111,6 +146,33 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 CREATE INDEX IF NOT EXISTS idx_conversations_agent_id ON conversations(agent_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_auth_users_user_id ON auth_users(user_id);
+CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_media_files_message_id ON media_files(message_id);
+
+INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+SELECT 'auth-user-admin-1', id, username, password_hash, role, status, access_to_panel, created_at, updated_at
+FROM users
+WHERE username IS NOT NULL AND id = 'user-admin-1'
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+SELECT concat('auth-', id), id, username, password_hash, role, status, access_to_panel, created_at, updated_at
+FROM users
+WHERE id <> 'user-admin-1' AND username IS NOT NULL
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
+SELECT concat('device-', id), id, 'Migrated from legacy system', concat('serial-', id), NULL, concat('+000000000', substr(id, 1, 3))
+FROM users
+WHERE role IN ('admin', 'supervisor', 'agent')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, user_id, details, created_at)
+SELECT concat('audit-init-', id), 'user', id, 'create_user', id, id, jsonb_build_object('source', 'migration', 'message', 'Migrated from legacy users table')::text, COALESCE(created_at, now()::text)
+FROM users
+WHERE id IS NOT NULL
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO agents (id, name, role, phone, avatar, initials, online)
 VALUES

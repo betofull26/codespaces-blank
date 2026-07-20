@@ -17,3 +17,14 @@ test('default admin seed uses a bcrypt hash that matches the secret password', a
   assert.match(hash, /^\$2b\$/);
   assert.equal(await bcrypt.compare('secret', hash), true);
 });
+
+test('initialization script creates the new auth and device tables needed for the upgraded schema', async () => {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const sql = await fs.readFile(path.resolve(__dirname, 'init.sql'), 'utf8');
+
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS auth_users/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS devices/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS media_files/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS user_sessions/i);
+});

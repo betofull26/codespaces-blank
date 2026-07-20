@@ -325,6 +325,19 @@ export const revokeSessionToken = async (token: string, repository: UserReposito
   }
 };
 
+export const logLogoutAudit = async (repository: UserRepository, userId: string, actorId: string): Promise<void> => {
+  const auditEntry = createAuditEntry('credential', userId, 'logout', actorId, { userId });
+  await repository.createAuditLog({
+    id: auditEntry.id,
+    entityType: auditEntry.entityType,
+    entityId: auditEntry.entityId,
+    action: auditEntry.action,
+    performedBy: auditEntry.performedBy,
+    details: auditEntry.details,
+    createdAt: auditEntry.createdAt,
+  });
+};
+
 export const verifySessionToken = async (
   token: string,
   repository: UserRepository,

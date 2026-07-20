@@ -113,6 +113,33 @@ export class PostgresUserRepository implements UserRepository {
       'INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
       [user.id, user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
     );
+
+    const authUserId = `auth-${user.id}`;
+    await db.query(
+      `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id) DO UPDATE SET
+         user_id = EXCLUDED.user_id,
+         username = EXCLUDED.username,
+         password_hash = EXCLUDED.password_hash,
+         role = EXCLUDED.role,
+         status = EXCLUDED.status,
+         access_to_panel = EXCLUDED.access_to_panel,
+         updated_at = EXCLUDED.updated_at`,
+      [authUserId, user.id, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
+    );
+
+    const roleLower = user.role?.toLowerCase?.() ?? '';
+    if (roleLower === 'agent' || roleLower === 'supervisor') {
+      const deviceId = `device-${user.id}`;
+      await db.query(
+        `INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO NOTHING`,
+        [deviceId, user.id, 'Migrated from legacy system', `serial-${user.id}`, null, `+000000000000`],
+      );
+    }
+
     return user;
   }
 
@@ -125,6 +152,21 @@ export class PostgresUserRepository implements UserRepository {
     if (!Array.isArray(result) || result.length === 0) {
       throw new Error('User not found');
     }
+
+    const authUserId = `auth-${user.id}`;
+    await db.query(
+      `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id) DO UPDATE SET
+         username = EXCLUDED.username,
+         password_hash = EXCLUDED.password_hash,
+         role = EXCLUDED.role,
+         status = EXCLUDED.status,
+         access_to_panel = EXCLUDED.access_to_panel,
+         updated_at = EXCLUDED.updated_at`,
+      [authUserId, user.id, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
+    );
+
     return user;
   }
 
@@ -133,6 +175,18 @@ export class PostgresUserRepository implements UserRepository {
     const accessToPanel = role !== 'agent';
     const updatedAt = new Date().toISOString();
     const rows = await db.query('UPDATE users SET role = $1, access_to_panel = $2, updated_at = $3 WHERE id = $4 RETURNING id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [role, accessToPanel, updatedAt, id]);
+
+    const authUserId = `auth-${id}`;
+    await db.query(
+      `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id) DO UPDATE SET
+         role = EXCLUDED.role,
+         access_to_panel = EXCLUDED.access_to_panel,
+         updated_at = EXCLUDED.updated_at`,
+      [authUserId, id, null, null, role, 'active', accessToPanel, new Date().toISOString(), updatedAt],
+    );
+
     return (rows[0] as UserModel | undefined) ?? null;
   }
 
@@ -140,6 +194,17 @@ export class PostgresUserRepository implements UserRepository {
     const db = await getDatabaseClient();
     const updatedAt = new Date().toISOString();
     const rows = await db.query('UPDATE users SET status = $1, updated_at = $2 WHERE id = $3 RETURNING id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [status, updatedAt, id]);
+
+    const authUserId = `auth-${id}`;
+    await db.query(
+      `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id) DO UPDATE SET
+         status = EXCLUDED.status,
+         updated_at = EXCLUDED.updated_at`,
+      [authUserId, id, null, null, 'agent', status, false, new Date().toISOString(), updatedAt],
+    );
+
     return (rows[0] as UserModel | undefined) ?? null;
   }
 
@@ -150,17 +215,20 @@ export class PostgresUserRepository implements UserRepository {
 
   async createAuditLog(entry: AuditLogModel): Promise<void> {
     const db = await getDatabaseClient();
+    const userIdValue = entry.performedBy && entry.performedBy !== 'system' ? entry.performedBy : null;
     await db.query(
-      'INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, details, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [entry.id, entry.entityType, entry.entityId, entry.action, entry.performedBy, entry.details, entry.createdAt],
+      'INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, user_id, details, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [entry.id, entry.entityType, entry.entityId, entry.action, entry.performedBy, userIdValue, entry.details, entry.createdAt],
     );
   }
 
   async createSession(session: SessionModel): Promise<void> {
     const db = await getDatabaseClient();
+    const authUserRows = await db.query('SELECT id FROM auth_users WHERE user_id = $1 LIMIT 1', [session.userId]);
+    const authUserId = (authUserRows[0] as { id: string } | undefined)?.id ?? session.userId;
     await db.query(
-      'INSERT INTO user_sessions (id, user_id, token_hash, role, expires_at, created_at, updated_at, revoked_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-      [session.id, session.userId, session.tokenHash, session.role, session.expiresAt, session.createdAt, session.updatedAt, session.revokedAt ?? null],
+      'INSERT INTO user_sessions (id, user_id, auth_user_id, token_hash, role, expires_at, created_at, updated_at, revoked_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+      [session.id, session.userId, authUserId, session.tokenHash, session.role, session.expiresAt, session.createdAt, session.updatedAt, session.revokedAt ?? null],
     );
   }
 
