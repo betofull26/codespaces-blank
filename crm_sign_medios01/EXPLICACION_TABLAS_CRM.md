@@ -35,7 +35,7 @@ Representa a toda la fuerza humana del CRM. Centraliza los datos del perfil y de
     *   `access_to_panel` (`BOOLEAN`, NOT NULL DEFAULT `FALSE`): Control rápido de inicio de sesión.
     *   `position` (`TEXT`): Puesto de trabajo (ej. *"Agente de Soporte"*, *"Coordinador"*).
     *   `entry_date` (`TEXT`): Fecha oficial de contratación o ingreso a la organización.
-    *   `foto` (`TEXT`): Ruta local o URL de la imagen de perfil del usuario. **(¡Renombrado de avatar a foto!)**
+    *   `foto` (`TEXT`): Ruta local o URL de la imagen de perfil del usuario.
     *   `initials` (`TEXT`): Iniciales de visualización en la UI (ej. *"LM"*).
     *   `online` (`BOOLEAN`, NOT NULL DEFAULT `FALSE`): Indica si el usuario está conectado en tiempo real en la plataforma.
     *   `created_at` y `updated_at` (`TEXT`): Trazabilidad de creación y actualización de la ficha.
@@ -114,12 +114,11 @@ Garantiza que solo las personas autorizadas mantengan conexiones seguras al pane
 
 *   **¿Cómo funciona?**
     *   Cuando un administrador o supervisor inicia sesión, se genera un registro en esta tabla con un token único y seguro.
-    *   El middleware del backend valida este token en cada acción. Si el usuario pertenece a una sesión revocada o expirada, se le deniega el acceso de inmediato.
+    *   **Eliminación del campo `role`:** Se eliminó este campo para evitar duplicidad e inconsistencia de permisos. El middleware de autorización consulta el rol directamente desde la tabla `users` mediante el campo `user_id` en tiempo real. Esto garantiza que cualquier cambio de rol o revocación por parte del administrador bloquee accesos de inmediato, evitando problemas de permisos desactualizados.
 *   **Campos de la Tabla:**
     *   `id` (`TEXT`, PRIMARY KEY): Identificador único de sesión.
     *   `user_id` (`TEXT`, NOT NULL): Llave foránea que apunta a `users(id)`.
     *   `token_hash` (`TEXT`, NOT NULL, UNIQUE): Token de sesión encriptado para máxima seguridad de transporte.
-    *   `role` (`TEXT`, NOT NULL): El rol del usuario al momento de iniciar la sesión (`'admin'` o `'supervisor'`).
     *   `expires_at` (`TEXT`, NOT NULL): Fecha de expiración de la sesión.
     *   `created_at` y `updated_at` (`TEXT`): Registro temporal de actividad de la sesión.
     *   `revoked_at` (`TEXT`): Fecha de cierre de sesión (si el usuario hace deslogueo manual).
