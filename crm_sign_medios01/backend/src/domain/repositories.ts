@@ -1,4 +1,4 @@
-import type { AgentModel, ConversationModel, MessageModel, UserModel, AuditLogModel, SessionModel } from './models.js';
+import type { AgentModel, ConversationModel, MessageModel, UserModel, AuthUserModel, AuditLogModel, SessionModel, DeviceModel } from './models.js';
 
 export interface AgentRepository {
   list(): Promise<AgentModel[]>;
@@ -32,6 +32,11 @@ export interface UserRepository {
   createSession(session: SessionModel): Promise<void>;
   getSessionByTokenHash(tokenHash: string): Promise<SessionModel | null>;
   revokeSession(tokenHash: string): Promise<void>;
+  getAuthUserByUsername?(username: string): Promise<AuthUserModel | null>;
+  upsertAuthUser?(authUser: AuthUserModel): Promise<AuthUserModel>;
+  listDevices(): Promise<DeviceModel[]>;
+  getDeviceByUserId(userId: string): Promise<DeviceModel | null>;
+  upsertDevice?(device: DeviceModel): Promise<DeviceModel>;
 }
 
 export interface AuthenticatedUser {

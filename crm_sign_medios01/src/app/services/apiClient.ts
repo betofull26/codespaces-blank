@@ -10,7 +10,8 @@ const getRuntimeEnv = (): RuntimeEnv => {
 
 export const getApiBaseUrl = (): string => {
   const env = getRuntimeEnv();
-  return env?.VITE_API_BASE ?? "/api";
+  const fromProcessEnv = typeof process !== "undefined" ? process.env?.VITE_API_BASE : undefined;
+  return env?.VITE_API_BASE ?? fromProcessEnv ?? "/api";
 };
 
 export const buildApiUrl = (path: string, baseUrl = getApiBaseUrl()): string => {

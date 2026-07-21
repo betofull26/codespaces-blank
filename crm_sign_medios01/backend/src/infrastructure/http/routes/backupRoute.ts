@@ -4,6 +4,8 @@ import { ensureAuthorized } from '../../../application/authorization.js';
 import { buildErrorResponse, buildSuccessResponse } from '../../../common/apiResponse.js';
 import { authenticateRequest } from '../middleware/authMiddleware.js';
 import { getDatabaseClient } from '../../../infrastructure/database/connection.js';
+import { PostgresUserRepository } from '../../../infrastructure/database/repositories.js';
+import { logAuditEvent } from '../../../application/userManagement.js';
 
 export const backupRouter = Router();
 
@@ -60,6 +62,14 @@ backupRouter.post('/backups', requireAdminForMutations, async (req, res) => {
     }
 
     const backup = await createBackup(backupType, agentId, actorName);
+    const auditRepo = new PostgresUserRepository();
+    const actorId = (req as any).user?.userId ?? 'system';
+    await logAuditEvent(auditRepo, 'backup', backup.id, 'create_backup', actorId, {
+      backupType,
+      fileName: backup.fileName,
+      agentId,
+      actorName,
+    });
     res.status(201).json(buildSuccessResponse(backup, 'Respaldo creado correctamente'));
   } catch (error) {
     res.status(500).json(buildErrorResponse('No se pudo crear el respaldo', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));
@@ -70,8 +80,15 @@ backupRouter.get('/backups/download/:id', requireAdminForMutations, async (req, 
   try {
     const download = await downloadBackupFile(req.params.id);
     if (!download) {
+      const auditRepo = new PostgresUserRepository();
+      const actorId = (req as any).user?.userId ?? 'system';
+      await logAuditEvent(auditRepo, 'backup', req.params.id, 'download_backup_missing', actorId, { reason: 'not-found' });
       return res.status(404).json(buildErrorResponse('Respaldo no encontrado', 'NOT_FOUND'));
     }
+
+    const auditRepo = new PostgresUserRepository();
+    const actorId = (req as any).user?.userId ?? 'system';
+    await logAuditEvent(auditRepo, 'backup', req.params.id, 'download_backup', actorId, { fileName: download.fileName });
 
     res.download(download.filePath, download.fileName);
   } catch (error) {

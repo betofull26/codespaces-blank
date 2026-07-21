@@ -217,6 +217,16 @@ export async function createUser(payload: UserCreatePayload, role: string, actor
   });
 }
 
+export async function updateDeviceForUser(userId: string, payload: { brandModel?: string; serialNumber1?: string; serialNumber2?: string; assignedPhone?: string }, role: string) {
+  return requestApiData(`/devices/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    headers: {
+      "x-user-role": role,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateUser(userId: string, payload: UserCreatePayload, role: string, actorId?: string): Promise<BackendUser> {
   return requestApiData<BackendUser>(`/users/${encodeURIComponent(userId)}`, {
     method: "PUT",

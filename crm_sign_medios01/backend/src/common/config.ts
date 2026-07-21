@@ -7,14 +7,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const resolveEnvFile = (startDir = __dirname): string | undefined => {
-  const candidates = [
-    path.resolve(startDir, '.env'),
-    path.resolve(startDir, '..', '.env'),
-    path.resolve(startDir, '..', '..', '.env'),
-    path.resolve(startDir, '..', '..', '..', '.env'),
-  ];
+  const candidates: string[] = [];
+  let currentDir = path.resolve(startDir);
 
-  return candidates.find((candidate) => fs.existsSync(candidate));
+  while (true) {
+    candidates.push(path.join(currentDir, '.env'));
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+
+  return candidates.reverse().find((candidate) => fs.existsSync(candidate));
 };
 
 const envFile = resolveEnvFile();

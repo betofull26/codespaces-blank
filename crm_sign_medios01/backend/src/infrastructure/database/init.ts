@@ -146,6 +146,93 @@ BEGIN
     ALTER TABLE user_sessions ADD COLUMN auth_user_id TEXT;
   END IF;
 END $$;
+
+CREATE TABLE IF NOT EXISTS auth_users (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+  username TEXT UNIQUE,
+  password_hash TEXT,
+  role TEXT NOT NULL DEFAULT 'agent',
+  status TEXT NOT NULL DEFAULT 'active',
+  access_to_panel BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+  CONSTRAINT fk_auth_users_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS devices (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+  brand_model TEXT NOT NULL,
+  serial_number_1 TEXT NOT NULL UNIQUE,
+  serial_number_2 TEXT,
+  assigned_phone TEXT NOT NULL UNIQUE,
+  CONSTRAINT fk_devices_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id TEXT PRIMARY KEY,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  performed_by TEXT NOT NULL,
+  user_id TEXT,
+  details TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+SELECT
+  COALESCE(NULLIF(auth_user.id, ''), concat('auth-', u.id)),
+  u.id,
+  u.username,
+  u.password_hash,
+  COALESCE(NULLIF(u.role, ''), 'agent'),
+  COALESCE(NULLIF(u.status, ''), 'active'),
+  COALESCE(u.access_to_panel, FALSE),
+  COALESCE(u.created_at, NOW()::TEXT),
+  COALESCE(u.updated_at, NOW()::TEXT)
+FROM users u
+LEFT JOIN auth_users auth_user ON auth_user.user_id = u.id
+WHERE u.id IS NOT NULL
+ON CONFLICT (user_id) DO UPDATE SET
+  username = EXCLUDED.username,
+  password_hash = EXCLUDED.password_hash,
+  role = EXCLUDED.role,
+  status = EXCLUDED.status,
+  access_to_panel = EXCLUDED.access_to_panel,
+  updated_at = EXCLUDED.updated_at;
+
+INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
+SELECT
+  concat('device-', u.id),
+  u.id,
+  COALESCE(NULLIF(u.position, ''), 'Migrated from legacy system'),
+  concat('serial-', u.id),
+  NULL,
+  concat('+000000000', substr(u.id, 1, 3))
+FROM users u
+LEFT JOIN devices d ON d.user_id = u.id
+WHERE u.id IS NOT NULL
+ON CONFLICT (user_id) DO UPDATE SET
+  brand_model = EXCLUDED.brand_model,
+  serial_number_1 = EXCLUDED.serial_number_1,
+  assigned_phone = EXCLUDED.assigned_phone;
+
+INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, user_id, details, created_at)
+SELECT
+  concat('audit-migrated-', u.id),
+  'user',
+  u.id,
+  'migrate_user',
+  COALESCE(u.username, 'system'),
+  u.id,
+  json_build_object('source', 'migration', 'message', 'Migrated from legacy users table')::text,
+  COALESCE(u.created_at, NOW()::TEXT)
+FROM users u
+LEFT JOIN audit_logs existing_log ON existing_log.entity_id = u.id AND existing_log.action = 'migrate_user'
+WHERE u.id IS NOT NULL
+ON CONFLICT (id) DO NOTHING;
 `;
 
 export const initializeDatabase = async () => {

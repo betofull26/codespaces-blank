@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, Camera, Search } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { UserRecordForm } from "./UserRecordForm";
 import { createUser, deleteUserById, fetchUsers, updateUser, updateUserStatus, type BackendUser } from "../../services/dashboardApi";
+import { updateDeviceForUser } from "../../services/dashboardApi";
 import { getCurrentUser, getCurrentUserRole } from "../../lib/auth";
 
 const USER_RECORDS_STORAGE_KEY = "crm-sign-user-records";
@@ -157,6 +158,12 @@ export function UserRecordManagement() {
 
     try {
       const created = await createUser(payload, role, currentUser?.id ?? "system");
+      await updateDeviceForUser(created.id, {
+        brandModel: record.deviceModel,
+        serialNumber1: record.serialNumber,
+        serialNumber2: record.serialNumber2,
+        assignedPhone: record.assignedPhone,
+      }, role);
       
       // Save the full record with extra data to localStorage BEFORE refreshing
       const completeRecord: UserRecord = {
@@ -208,6 +215,12 @@ export function UserRecordManagement() {
 
     try {
       await updateUser(editingRecord.id, payload, role, currentUser?.id ?? "system");
+      await updateDeviceForUser(editingRecord.id, {
+        brandModel: record.deviceModel,
+        serialNumber1: record.serialNumber,
+        serialNumber2: record.serialNumber2,
+        assignedPhone: record.assignedPhone,
+      }, role);
       
       // Save the full record with extra data to localStorage BEFORE refreshing
       const completeRecord: UserRecord = {

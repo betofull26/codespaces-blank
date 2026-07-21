@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifySessionToken } from '../../../application/userManagement.js';
 import type { UserRepository } from '../../../domain/repositories.js';
-import { PostgresUserRepository } from '../../../infrastructure/database/repositories.js';
+import { getUserRepository } from '../repositoryFactory.js';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -27,7 +27,7 @@ export const authenticateRequest = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction,
-  repository: UserRepository = new PostgresUserRepository(),
+  repository: UserRepository = getUserRepository(),
 ) => {
   const header = req.headers.authorization;
   const bearerToken = typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7).trim() : '';

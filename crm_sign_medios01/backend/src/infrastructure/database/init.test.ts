@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import bcrypt from 'bcrypt';
+import { getUserSchemaMigrationSql } from './init.js';
 
 test('default admin seed uses a bcrypt hash that matches the secret password', async () => {
   const __filename = fileURLToPath(import.meta.url);
@@ -27,4 +28,14 @@ test('initialization script creates the new auth and device tables needed for th
   assert.match(sql, /CREATE TABLE IF NOT EXISTS devices/i);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS media_files/i);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS user_sessions/i);
+});
+
+test('user schema migration includes real data migration into auth_users, devices and audit_logs', () => {
+  const migrationSql = getUserSchemaMigrationSql();
+
+  assert.match(migrationSql, /INSERT INTO auth_users/i);
+  assert.match(migrationSql, /FROM users/i);
+  assert.match(migrationSql, /ON CONFLICT \(user_id\) DO UPDATE/i);
+  assert.match(migrationSql, /INSERT INTO devices/i);
+  assert.match(migrationSql, /INSERT INTO audit_logs/i);
 });

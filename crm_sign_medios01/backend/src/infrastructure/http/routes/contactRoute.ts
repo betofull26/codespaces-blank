@@ -2,8 +2,7 @@ import { Router } from 'express';
 import { PostgresContactRepository, PostgresUserRepository } from '../../database/repositories.js';
 import { buildSuccessResponse, buildErrorResponse } from '../../../common/apiResponse.js';
 import { authenticateRequest, type AuthenticatedRequest } from '../middleware/authMiddleware.js';
-import { ensureAuthorized } from '../../../application/authorization.js';
-import { createAuditEntry } from '../../../application/audit.js';
+import { logAuditEvent } from '../../../application/userManagement.js';
 
 export const contactRouter = Router();
 
@@ -41,6 +40,15 @@ contactRouter.post('/agents/:agentId/contacts', async (req, res) => {
 
       const repo = new PostgresContactRepository();
       const created = await repo.create(agentId, name, phone, company || null, position || null);
+      const auditRepo = new PostgresUserRepository();
+      const actorId = (req as AuthenticatedRequest).user?.userId ?? 'system';
+      await logAuditEvent(auditRepo, 'contact', created.id, 'create_contact', actorId, {
+        agentId,
+        name,
+        phone,
+        company: company || null,
+        position: position || null,
+      });
       res.status(201).json(buildSuccessResponse(created, 'Contact created'));
     });
   } catch (error) {
@@ -70,19 +78,13 @@ contactRouter.post('/contacts', async (req, res) => {
       const repo = new PostgresContactRepository();
       const created = await repo.create(agentId, name, phone, company || null, position || null);
       const auditRepo = new PostgresUserRepository();
-      const auditEntry = createAuditEntry('contact', created.id, 'create_contact', req.user?.id ?? 'system', {
+      const actorId = (req as AuthenticatedRequest).user?.userId ?? 'system';
+      await logAuditEvent(auditRepo, 'contact', created.id, 'create_contact', actorId, {
         agentId,
         name,
         phone,
-      });
-      await auditRepo.createAuditLog({
-        id: auditEntry.id,
-        entityType: auditEntry.entityType,
-        entityId: auditEntry.entityId,
-        action: auditEntry.action,
-        performedBy: auditEntry.performedBy,
-        details: auditEntry.details,
-        createdAt: auditEntry.createdAt,
+        company: company || null,
+        position: position || null,
       });
       res.status(201).json(buildSuccessResponse(created, 'Contact created'));
     });
@@ -111,19 +113,13 @@ contactRouter.put('/contacts/:contactId', async (req, res) => {
       const repo = new PostgresContactRepository();
       const updated = await repo.update(contactId, name, phone, company || null, position || null);
       const auditRepo = new PostgresUserRepository();
-      const auditEntry = createAuditEntry('contact', updated.id, 'update_contact', req.user?.id ?? 'system', {
+      const actorId = (req as AuthenticatedRequest).user?.userId ?? 'system';
+      await logAuditEvent(auditRepo, 'contact', updated.id, 'update_contact', actorId, {
         contactId,
         name,
         phone,
-      });
-      await auditRepo.createAuditLog({
-        id: auditEntry.id,
-        entityType: auditEntry.entityType,
-        entityId: auditEntry.entityId,
-        action: auditEntry.action,
-        performedBy: auditEntry.performedBy,
-        details: auditEntry.details,
-        createdAt: auditEntry.createdAt,
+        company: company || null,
+        position: position || null,
       });
       res.json(buildSuccessResponse(updated, 'Contact updated'));
     });
@@ -144,18 +140,8 @@ contactRouter.delete('/contacts/:contactId', async (req, res) => {
       const repo = new PostgresContactRepository();
       await repo.delete(contactId);
       const auditRepo = new PostgresUserRepository();
-      const auditEntry = createAuditEntry('contact', contactId, 'delete_contact', req.user?.id ?? 'system', {
-        contactId,
-      });
-      await auditRepo.createAuditLog({
-        id: auditEntry.id,
-        entityType: auditEntry.entityType,
-        entityId: auditEntry.entityId,
-        action: auditEntry.action,
-        performedBy: auditEntry.performedBy,
-        details: auditEntry.details,
-        createdAt: auditEntry.createdAt,
-      });
+      const actorId = (req as AuthenticatedRequest).user?.userId ?? 'system';
+      await logAuditEvent(auditRepo, 'contact', contactId, 'delete_contact', actorId, { contactId });
       res.json(buildSuccessResponse({ id: contactId }, 'Contact deleted'));
     });
   } catch (error) {

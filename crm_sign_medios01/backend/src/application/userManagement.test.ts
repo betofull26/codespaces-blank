@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createUser, changeUserRole, changeUserStatus, getUserById, listUsers, loginUser, updateUser, validateLoginPayload } from './userManagement.js';
+import { createUser, changeUserRole, changeUserStatus, getUserById, listUsers, loginUser, logAuditEvent, updateUser, validateLoginPayload } from './userManagement.js';
 import bcrypt from 'bcrypt';
 import type { UserRepository } from '../domain/repositories.js';
 import type { UserModel } from '../domain/models.js';
@@ -146,6 +146,123 @@ test('loginUser returns a structured session token after a successful login', as
   const authenticated = await loginUser(repository, 'token.user', 'secret123', 'admin');
 
   assert.match(authenticated.sessionToken, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+});
+
+test('createUser syncs auth identity and device metadata through the business flow', async () => {
+  const createdAuthUsers: Array<NonNullable<UserRepository['upsertAuthUser']> extends (arg: infer A) => any ? A : never> = [];
+  const createdDevices: Array<NonNullable<UserRepository['upsertDevice']> extends (arg: infer A) => any ? A : never> = [];
+  const repository: UserRepository = {
+    listUsers: async () => [],
+    getUserById: async () => null,
+    getUserByUsername: async () => null,
+    createUser: async (user) => user,
+    updateUser: async (user) => user,
+    deleteUser: async () => undefined,
+    updateUserRole: async () => null,
+    updateUserStatus: async () => null,
+    createAuditLog: async () => undefined,
+    createSession: async () => undefined,
+    getSessionByTokenHash: async () => null,
+    revokeSession: async () => undefined,
+    upsertAuthUser: async (authUser) => {
+      createdAuthUsers.push(authUser);
+      return authUser;
+    },
+    upsertDevice: async (device) => {
+      createdDevices.push(device);
+      return device;
+    },
+  };
+
+  await createUser(repository, {
+    id: 'user-9',
+    fullName: 'Diana Torres',
+    username: 'diana.torres',
+    passwordHash: 'plain-password',
+    role: 'agent',
+    status: 'active',
+    accessToPanel: false,
+    createdAt: '2026-07-03T00:00:00.000Z',
+    updatedAt: '2026-07-03T00:00:00.000Z',
+    assignedPhone: '+584145550120',
+    deviceModel: 'Samsung A54',
+    serialNumber: 'SER-001',
+    serialNumber2: 'SER-002',
+  } as UserModel, 'admin');
+
+  assert.equal(createdAuthUsers[0]?.username, 'diana.torres');
+  assert.equal(createdAuthUsers[0]?.userId, 'user-9');
+  assert.equal(createdDevices[0]?.assignedPhone, '+584145550120');
+});
+
+test('loginUser resolves credentials from auth_users when the legacy lookup is unavailable', async () => {
+  const passwordHash = await bcrypt.hash('secret', 10);
+  const repository: UserRepository = {
+    listUsers: async () => [],
+    getUserById: async () => ({
+      id: 'user-10',
+      fullName: 'Marta Díaz',
+      username: 'marta.diaz',
+      passwordHash,
+      role: 'admin',
+      status: 'active',
+      accessToPanel: true,
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    } as UserModel),
+    getUserByUsername: async () => null,
+    createUser: async (user) => user,
+    updateUser: async (user) => user,
+    deleteUser: async () => undefined,
+    updateUserRole: async () => null,
+    updateUserStatus: async () => null,
+    createAuditLog: async () => undefined,
+    createSession: async () => undefined,
+    getSessionByTokenHash: async () => null,
+    revokeSession: async () => undefined,
+    getAuthUserByUsername: async (username) => ({
+      id: 'auth-user-10',
+      userId: 'user-10',
+      username,
+      passwordHash,
+      role: 'admin',
+      status: 'active',
+      accessToPanel: true,
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    }),
+  };
+
+  const authenticated = await loginUser(repository, 'marta.diaz', 'secret', 'admin');
+
+  assert.equal(authenticated.user.id, 'user-10');
+  assert.equal(authenticated.user.username, 'marta.diaz');
+});
+
+test('logAuditEvent persists a real audit entry through the repository', async () => {
+  let persistedEntry: { action: string; entityId: string; performedBy: string } | null = null;
+  const repository: UserRepository = {
+    listUsers: async () => [],
+    getUserById: async () => null,
+    getUserByUsername: async () => null,
+    createUser: async (user) => user,
+    updateUser: async (user) => user,
+    deleteUser: async () => undefined,
+    updateUserRole: async () => null,
+    updateUserStatus: async () => null,
+    createAuditLog: async (entry) => {
+      persistedEntry = { action: entry.action, entityId: entry.entityId, performedBy: entry.performedBy };
+    },
+    createSession: async () => undefined,
+    getSessionByTokenHash: async () => null,
+    revokeSession: async () => undefined,
+  };
+
+  await logAuditEvent(repository, 'device', 'user-7', 'update_device', 'admin', { source: 'real-route' });
+
+  assert.equal(persistedEntry?.action, 'update_device');
+  assert.equal(persistedEntry?.entityId, 'user-7');
+  assert.equal(persistedEntry?.performedBy, 'admin');
 });
 
 test('changeUserRole revokes panel access when role becomes agent', async () => {

@@ -34,6 +34,15 @@ export interface CustomerModel {
   phone?: string | null;
 }
 
+export interface DeviceModel {
+  id: string;
+  userId: string;
+  brandModel?: string | null;
+  serialNumber1?: string | null;
+  serialNumber2?: string | null;
+  assignedPhone?: string | null;
+}
+
 export interface UserModel {
   id: string;
   fullName: string;
@@ -41,6 +50,24 @@ export interface UserModel {
   passwordHash: string;
   role: 'admin' | 'agent' | 'supervisor';
   status: 'active' | 'inactive' | 'suspended';
+  accessToPanel: boolean;
+  createdAt: string;
+  updatedAt: string;
+  assignedPhone?: string | null;
+  deviceModel?: string | null;
+  serialNumber?: string | null;
+  serialNumber2?: string | null;
+  entryDate?: string | null;
+  photo?: string | null;
+}
+
+export interface AuthUserModel {
+  id: string;
+  userId: string;
+  username: string;
+  passwordHash: string;
+  role: UserModel['role'];
+  status: UserModel['status'];
   accessToPanel: boolean;
   createdAt: string;
   updatedAt: string;

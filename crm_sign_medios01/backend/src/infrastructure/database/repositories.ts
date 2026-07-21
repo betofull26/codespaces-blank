@@ -1,4 +1,4 @@
-import type { AgentModel, ConversationModel, MessageModel, UserModel, AuditLogModel, SessionModel } from '../../domain/models.js';
+import type { AgentModel, ConversationModel, MessageModel, UserModel, AuthUserModel, AuditLogModel, SessionModel, DeviceModel } from '../../domain/models.js';
 import type { AgentRepository, ConversationRepository, MessageRepository, UserRepository, ContactRepository } from '../../domain/repositories.js';
 import { getDatabaseClient } from './connection.js';
 
@@ -213,6 +213,30 @@ export class PostgresUserRepository implements UserRepository {
     await db.query('DELETE FROM users WHERE id = $1', [id]);
   }
 
+  async getAuthUserByUsername(username: string): Promise<AuthUserModel | null> {
+    const db = await getDatabaseClient();
+    const rows = await db.query('SELECT id, user_id AS "userId", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM auth_users WHERE LOWER(username) = LOWER($1) LIMIT 1', [username]);
+    return (rows[0] as AuthUserModel | undefined) ?? null;
+  }
+
+  async upsertAuthUser(authUser: AuthUserModel): Promise<AuthUserModel> {
+    const db = await getDatabaseClient();
+    await db.query(
+      `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id) DO UPDATE SET
+         user_id = EXCLUDED.user_id,
+         username = EXCLUDED.username,
+         password_hash = EXCLUDED.password_hash,
+         role = EXCLUDED.role,
+         status = EXCLUDED.status,
+         access_to_panel = EXCLUDED.access_to_panel,
+         updated_at = EXCLUDED.updated_at`,
+      [authUser.id, authUser.userId, authUser.username, authUser.passwordHash, authUser.role, authUser.status, authUser.accessToPanel, authUser.createdAt, authUser.updatedAt],
+    );
+    return authUser;
+  }
+
   async createAuditLog(entry: AuditLogModel): Promise<void> {
     const db = await getDatabaseClient();
     const userIdValue = entry.performedBy && entry.performedBy !== 'system' ? entry.performedBy : null;
@@ -247,6 +271,34 @@ export class PostgresUserRepository implements UserRepository {
       'UPDATE user_sessions SET revoked_at = $1, updated_at = $1 WHERE token_hash = $2',
       [new Date().toISOString(), tokenHash],
     );
+  }
+
+  async listDevices(): Promise<DeviceModel[]> {
+    const db = await getDatabaseClient();
+    const rows = await db.query('SELECT id, user_id AS "userId", brand_model AS "brandModel", serial_number_1 AS "serialNumber1", serial_number_2 AS "serialNumber2", assigned_phone AS "assignedPhone" FROM devices ORDER BY id');
+    return rows as DeviceModel[];
+  }
+
+  async getDeviceByUserId(userId: string): Promise<DeviceModel | null> {
+    const db = await getDatabaseClient();
+    const rows = await db.query('SELECT id, user_id AS "userId", brand_model AS "brandModel", serial_number_1 AS "serialNumber1", serial_number_2 AS "serialNumber2", assigned_phone AS "assignedPhone" FROM devices WHERE user_id = $1 LIMIT 1', [userId]);
+    return (rows[0] as DeviceModel | undefined) ?? null;
+  }
+
+  async upsertDevice(device: DeviceModel): Promise<DeviceModel> {
+    const db = await getDatabaseClient();
+    const id = device.id || `device-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await db.query(
+      `INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_id) DO UPDATE SET
+         brand_model = EXCLUDED.brand_model,
+         serial_number_1 = EXCLUDED.serial_number_1,
+         serial_number_2 = EXCLUDED.serial_number_2,
+         assigned_phone = EXCLUDED.assigned_phone`,
+      [id, device.userId, device.brandModel ?? 'Migrated from legacy system', device.serialNumber1 ?? `serial-${device.userId}`, device.serialNumber2 ?? null, device.assignedPhone ?? null],
+    );
+    return { ...device, id };
   }
 }
 

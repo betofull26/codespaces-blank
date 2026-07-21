@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
-import type { UserModel } from '../domain/models.js';
+import type { AuthUserModel, DeviceModel, UserModel } from '../domain/models.js';
 import type { UserRepository } from '../domain/repositories.js';
 import { createAuditEntry, createRoleHistoryEntry } from './audit.js';
 import { getDatabaseClient } from '../infrastructure/database/connection.js';
@@ -72,6 +72,56 @@ const resolveUserLabel = (user: Pick<UserModel, 'username' | 'fullName' | 'role'
   return user.role === 'agent' ? user.fullName : user.username;
 };
 
+const syncAuthIdentityAndDevice = async (repository: UserRepository, user: Pick<UserModel, 'id' | 'username' | 'passwordHash' | 'role' | 'status' | 'accessToPanel' | 'createdAt' | 'updatedAt' | 'assignedPhone' | 'deviceModel' | 'serialNumber' | 'serialNumber2'>): Promise<void> => {
+  const authUser: AuthUserModel = {
+    id: `auth-${user.id}`,
+    userId: user.id,
+    username: user.username,
+    passwordHash: user.passwordHash,
+    role: user.role,
+    status: user.status,
+    accessToPanel: user.accessToPanel,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+
+  if (typeof repository.upsertAuthUser === 'function') {
+    await repository.upsertAuthUser(authUser);
+  }
+
+  if (typeof repository.upsertDevice === 'function') {
+    const device: DeviceModel = {
+      id: `device-${user.id}`,
+      userId: user.id,
+      brandModel: user.deviceModel ?? null,
+      serialNumber1: user.serialNumber ?? null,
+      serialNumber2: user.serialNumber2 ?? null,
+      assignedPhone: user.assignedPhone ?? null,
+    };
+    await repository.upsertDevice(device);
+  }
+};
+
+export const logAuditEvent = async (
+  repository: UserRepository,
+  entityType: string,
+  entityId: string,
+  action: string,
+  performedBy: string,
+  details: Record<string, unknown>,
+): Promise<void> => {
+  const auditEntry = createAuditEntry(entityType, entityId, action, performedBy, details);
+  await repository.createAuditLog({
+    id: auditEntry.id,
+    entityType: auditEntry.entityType,
+    entityId: auditEntry.entityId,
+    action: auditEntry.action,
+    performedBy: auditEntry.performedBy,
+    details: auditEntry.details,
+    createdAt: auditEntry.createdAt,
+  });
+};
+
 export const createUser = async (
   repository: UserRepository,
   user: UserModel,
@@ -99,34 +149,29 @@ export const createUser = async (
   };
 
   const created = await repository.createUser(userToCreate);
+  await syncAuthIdentityAndDevice(repository, created);
 
   // If the user is created with role "Agente" or "agent", also create an agent record
   if (isAgent && created.id) {
-    const db = await getDatabaseClient();
-    await db.query(
-      'INSERT INTO agents (id, name, role, online) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
-      [created.id, created.fullName, 'agent', false]
-    );
+    try {
+      const db = await getDatabaseClient();
+      await db.query(
+        'INSERT INTO agents (id, name, role, online) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
+        [created.id, created.fullName, 'agent', false]
+      );
+    } catch (error) {
+      console.warn('[createUser] Could not persist agent record, continuing without it:', error);
+    }
   }
 
   const actorUsername = await resolveActorUsername(repository, actorId);
 
-  const auditEntry = createAuditEntry('user', created.id, 'create_user', actorId, {
+  await logAuditEvent(repository, 'user', created.id, 'create_user', actorId, {
     actorUsername,
     username: created.username,
     fullName: created.fullName,
     role: created.role,
     accessToPanel: created.accessToPanel,
-  });
-
-  await repository.createAuditLog({
-    id: auditEntry.id,
-    entityType: auditEntry.entityType,
-    entityId: auditEntry.entityId,
-    action: auditEntry.action,
-    performedBy: auditEntry.performedBy,
-    details: auditEntry.details,
-    createdAt: auditEntry.createdAt,
   });
 
   return created;
@@ -151,36 +196,34 @@ export const changeUserRole = async (
   // If the role is changed to "Agente", create or update the agent record
   const roleLower = nextRole?.toLowerCase?.();
   if ((roleLower === 'agente' || roleLower === 'agent') && updated.id) {
-    const db = await getDatabaseClient();
-    // Check if agent already exists
-    const existingAgent = await db.query('SELECT id FROM agents WHERE id = $1', [updated.id]);
-    
-    if (!existingAgent || existingAgent.length === 0) {
-      // Create new agent record
-      await db.query(
-        'INSERT INTO agents (id, name, role, online) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
-        [updated.id, updated.fullName, 'agent', false]
-      );
+    try {
+      const db = await getDatabaseClient();
+      // Check if agent already exists
+      const existingAgent = await db.query('SELECT id FROM agents WHERE id = $1', [updated.id]);
+      
+      if (!existingAgent || existingAgent.length === 0) {
+        // Create new agent record
+        await db.query(
+          'INSERT INTO agents (id, name, role, online) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
+          [updated.id, updated.fullName, 'agent', false]
+        );
+      }
+    } catch (error) {
+      console.warn('[changeUserRole] Could not persist agent record, continuing without it:', error);
     }
   }
+
+  await syncAuthIdentityAndDevice(repository, updated);
 
   const actorUsername = await resolveActorUsername(repository, actorId);
   const targetUserLabel = resolveUserLabel(updated);
   const roleHistoryEntry = createRoleHistoryEntry(updated.id, current.role, updated.role, actorId, 'Cambio de rol');
-  await repository.createAuditLog({
-    id: `audit-role-${updated.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    entityType: 'user',
-    entityId: updated.id,
-    action: 'change_role',
-    performedBy: actorId,
-    details: JSON.stringify({
-      actorUsername,
-      targetUserLabel,
-      previousRole: current.role,
-      newRole: updated.role,
-      historyId: roleHistoryEntry.id,
-    }),
-    createdAt: updated.updatedAt,
+  await logAuditEvent(repository, 'user', updated.id, 'change_role', actorId, {
+    actorUsername,
+    targetUserLabel,
+    previousRole: current.role,
+    newRole: updated.role,
+    historyId: roleHistoryEntry.id,
   });
 
   return updated;
@@ -205,6 +248,7 @@ export const updateUser = async (
   };
 
   const updated = await repository.updateUser(userToUpdate);
+  await syncAuthIdentityAndDevice(repository, updated);
   const actorUsername = await resolveActorUsername(repository, actorId);
 
   await repository.createAuditLog({
@@ -240,20 +284,13 @@ export const changeUserStatus = async (
     throw new Error('Failed to update status');
   }
 
+  await syncAuthIdentityAndDevice(repository, updated);
+
   const actorUsername = await resolveActorUsername(repository, actorId);
-  const auditEntry = createAuditEntry('user', updated.id, 'change_status', actorId, {
+  await logAuditEvent(repository, 'user', updated.id, 'change_status', actorId, {
     actorUsername,
     previousStatus: current.status,
     newStatus: updated.status,
-  });
-  await repository.createAuditLog({
-    id: auditEntry.id,
-    entityType: auditEntry.entityType,
-    entityId: auditEntry.entityId,
-    action: auditEntry.action,
-    performedBy: auditEntry.performedBy,
-    details: auditEntry.details,
-    createdAt: auditEntry.createdAt,
   });
 
   return updated;
@@ -273,23 +310,13 @@ export const deleteUser = async (
   const targetUserLabel = resolveUserLabel(current);
   await repository.deleteUser(userId);
 
-  const auditEntry = createAuditEntry('user', userId, 'delete_user', actorId, {
+  await logAuditEvent(repository, 'user', userId, 'delete_user', actorId, {
     actorUsername,
     targetUserLabel,
     deletedUser: current.fullName,
     previousRole: current.role,
     previousStatus: current.status,
     accessToPanelRevoked: current.accessToPanel,
-  });
-
-  await repository.createAuditLog({
-    id: auditEntry.id,
-    entityType: auditEntry.entityType,
-    entityId: auditEntry.entityId,
-    action: auditEntry.action,
-    performedBy: auditEntry.performedBy,
-    details: auditEntry.details,
-    createdAt: auditEntry.createdAt,
   });
 };
 
@@ -363,18 +390,23 @@ export const verifySessionToken = async (
       return { userId: decodedPayload.sub, role: decodedPayload.role };
     }
 
-    const session = await repository.getSessionByTokenHash(hashToken(token));
-    if (!session) {
+    try {
+      const session = await repository.getSessionByTokenHash(hashToken(token));
+      if (!session) {
+        return { userId: decodedPayload.sub, role: decodedPayload.role };
+      }
+      if (session.revokedAt) {
+        return { reason: 'revoked' };
+      }
+      if (new Date(session.expiresAt) <= new Date()) {
+        return { reason: 'expired' };
+      }
+
+      return { userId: decodedPayload.sub, role: decodedPayload.role };
+    } catch (error) {
+      console.warn('[verifySessionToken] Falling back to signed-token validation because session lookup failed:', error);
       return { userId: decodedPayload.sub, role: decodedPayload.role };
     }
-    if (session.revokedAt) {
-      return { reason: 'revoked' };
-    }
-    if (new Date(session.expiresAt) <= new Date()) {
-      return { reason: 'expired' };
-    }
-
-    return { userId: decodedPayload.sub, role: decodedPayload.role };
   } catch {
     return { reason: 'invalid' };
   }
@@ -386,38 +418,44 @@ export const loginUser = async (
   password: string,
   actorId: string,
 ): Promise<{ user: Omit<UserModel, 'passwordHash'>; sessionToken: string }> => {
-  const user = await repository.getUserByUsername(username);
+  const authUser = typeof repository.getAuthUserByUsername === 'function'
+    ? await repository.getAuthUserByUsername(username)
+    : null;
+
+  const legacyUser = await repository.getUserByUsername(username);
+  const user = legacyUser ?? (authUser ? await repository.getUserById(authUser.userId) : null) ?? null;
+
   if (!user || user.status !== 'active' || !user.accessToPanel) {
     throw new Error('Unauthorized');
   }
 
-  const matches = await passwordMatches(password, user.passwordHash);
+  const storedPasswordHash = authUser?.passwordHash ?? user.passwordHash;
+  const matches = await passwordMatches(password, storedPasswordHash);
 
   if (!matches) {
     throw new Error('Unauthorized');
   }
 
   const nextHashedPassword = await hashPasswordIfNeeded(password);
-  const needsPasswordMigration = !isBcryptHash(user.passwordHash);
+  const needsPasswordMigration = !isBcryptHash(storedPasswordHash);
 
   if (needsPasswordMigration) {
-    await repository.updateUser({
+    const migratedUser = {
       ...user,
       passwordHash: nextHashedPassword,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    await repository.updateUser(migratedUser);
+    if (authUser && typeof repository.upsertAuthUser === 'function') {
+      await repository.upsertAuthUser({
+        ...authUser,
+        passwordHash: nextHashedPassword,
+        updatedAt: migratedUser.updatedAt,
+      });
+    }
   }
 
-  const auditEntry = createAuditEntry('credential', user.id, 'login', actorId, { username });
-  await repository.createAuditLog({
-    id: auditEntry.id,
-    entityType: auditEntry.entityType,
-    entityId: auditEntry.entityId,
-    action: auditEntry.action,
-    performedBy: auditEntry.performedBy,
-    details: auditEntry.details,
-    createdAt: auditEntry.createdAt,
-  });
+  await logAuditEvent(repository, 'credential', user.id, 'login', actorId, { username });
 
   const { passwordHash: _passwordHash, ...safeUser } = user;
   const sessionToken = buildSessionToken(user.id, user.role);
