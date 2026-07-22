@@ -388,11 +388,9 @@ export const loginUser = async (
     ? await repository.getAuthUserByUsername(username)
     : null;
 
-  const user = authUser && authUser.userId
+  const user = authUser?.userId
     ? await repository.getUserById(authUser.userId)
-    : typeof repository.getUserByUsername === 'function'
-      ? await repository.getUserByUsername(username)
-      : null;
+    : null;
 
   if (!user || user.status !== 'active' || !user.accessToPanel) {
     throw new Error('Unauthorized');

@@ -126,18 +126,16 @@ export const createBackup = async (backupType: string = 'chats', agentId?: strin
     
     if (agentId) {
       agents = (await db.query(
-        `SELECT u.id, COALESCE(NULLIF(a.name, ''), u.full_name) AS name
+        `SELECT u.id, u.full_name AS name
          FROM users u
-         LEFT JOIN agents a ON a.user_id = u.id
          WHERE u.id = $1
          ORDER BY name`,
         [agentId],
       )) as Array<{ id: string; name: string }>;
     } else {
       agents = (await db.query(
-        `SELECT u.id, COALESCE(NULLIF(a.name, ''), u.full_name) AS name
+        `SELECT u.id, u.full_name AS name
          FROM users u
-         LEFT JOIN agents a ON a.user_id = u.id
          WHERE u.role IN ('agent', 'supervisor', 'admin')
          ORDER BY name`,
       )) as Array<{ id: string; name: string }>;
@@ -165,15 +163,13 @@ export const createBackup = async (backupType: string = 'chats', agentId?: strin
       }
     }
   } else if (backupType === 'contacts') {
-    // Export contacts joined with agent name; fall back to actorName when no agent assigned
     const contactRows = (await db.query(
       `SELECT
-         COALESCE(a.name, COALESCE(u.full_name, $1), $1) AS nombre_usuario,
+         COALESCE(u.full_name, $1) AS nombre_usuario,
          c.phone              AS telefono_cliente,
          c.name               AS nombre_cliente
        FROM contacts c
        LEFT JOIN users u ON u.id = c.agent_id
-       LEFT JOIN agents a ON a.user_id = u.id
        ORDER BY c.name`,
       [actorName ?? ''],
     )) as BackupExportEntry[];
@@ -186,12 +182,11 @@ export const createBackup = async (backupType: string = 'chats', agentId?: strin
     // 1. Export all contacts to CSV
     const contactRows = (await db.query(
       `SELECT
-         COALESCE(a.name, COALESCE(u.full_name, $1), $1) AS nombre_usuario,
+         COALESCE(u.full_name, $1) AS nombre_usuario,
          c.phone              AS telefono_cliente,
          c.name               AS nombre_cliente
        FROM contacts c
        LEFT JOIN users u ON u.id = c.agent_id
-       LEFT JOIN agents a ON a.user_id = u.id
        ORDER BY c.name`,
       [actorName ?? ''],
     )) as BackupExportEntry[];
@@ -201,9 +196,8 @@ export const createBackup = async (backupType: string = 'chats', agentId?: strin
 
     // 2. Export chats in hierarchical structure: AgentFolder/ConversationFile.txt
     const agents = (await db.query(
-      `SELECT u.id, COALESCE(NULLIF(a.name, ''), u.full_name) AS name
+      `SELECT u.id, u.full_name AS name
        FROM users u
-       LEFT JOIN agents a ON a.user_id = u.id
        WHERE u.role IN ('agent', 'supervisor', 'admin')
        ORDER BY name`,
     )) as Array<{ id: string; name: string }>;

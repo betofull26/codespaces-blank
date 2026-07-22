@@ -10,13 +10,15 @@ test('createBackupsTableSql creates the backups table', () => {
 });
 
 test('backup export queries cover agents, conversations and messages', () => {
-  assert.deepEqual(Object.keys(backupExportQueries), ['agents', 'conversations', 'messages']);
+  assert.deepEqual(Object.keys(backupExportQueries), ['agents', 'conversations', 'messages', 'contacts']);
 
   const agentsQuery = backupExportQueries.agents.sql.toLowerCase();
   const conversationsQuery = backupExportQueries.conversations.sql.toLowerCase();
   const messagesQuery = backupExportQueries.messages.sql.toLowerCase();
+  const contactsQuery = backupExportQueries.contacts.sql.toLowerCase();
 
-  assert.match(agentsQuery, /from agents/i);
+  assert.match(agentsQuery, /from users/i);
   assert.match(conversationsQuery, /from conversations/i);
   assert.match(messagesQuery, /from messages/i);
+  assert.match(contactsQuery, /from contacts/i);
 });

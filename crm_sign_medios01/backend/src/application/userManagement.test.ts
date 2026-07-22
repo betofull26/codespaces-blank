@@ -92,9 +92,9 @@ test('loginUser authenticates through auth_users and migrates plain-text passwor
   const repository: UserRepository = {
     listUsers: async () => [],
     getUserById: async () => ({
-      id: 'user-legacy',
-      fullName: 'Usuario Legacy',
-      username: 'legacyuser',
+      id: 'user-auth-flow',
+      fullName: 'Usuario Nuevo',
+      username: 'usuario.nuevo',
       passwordHash: 'plain-password',
       role: 'admin',
       status: 'active',
@@ -102,7 +102,9 @@ test('loginUser authenticates through auth_users and migrates plain-text passwor
       createdAt: '2026-07-03T00:00:00.000Z',
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel),
-    getUserByUsername: async () => null,
+    getUserByUsername: async () => {
+      throw new Error('legacy user lookup should not be used');
+    },
     createUser: async (user) => user,
     updateUser: async (user) => {
       updatedUser = user;
@@ -116,8 +118,8 @@ test('loginUser authenticates through auth_users and migrates plain-text passwor
     getSessionByTokenHash: async () => null,
     revokeSession: async () => undefined,
     getAuthUserByUsername: async (username) => ({
-      id: 'auth-user-legacy',
-      userId: 'user-legacy',
+      id: 'auth-user-flow',
+      userId: 'user-auth-flow',
       username,
       passwordHash: 'plain-password',
       role: 'admin',
@@ -132,29 +134,30 @@ test('loginUser authenticates through auth_users and migrates plain-text passwor
     },
   };
 
-  const authenticated = await loginUser(repository, 'legacyuser', 'plain-password', 'admin');
+  const authenticated = await loginUser(repository, 'usuario.nuevo', 'plain-password', 'admin');
 
-  assert.equal(authenticated.user.username, 'legacyuser');
+  assert.equal(authenticated.user.username, 'usuario.nuevo');
   assert.ok(authenticated.sessionToken.length > 0);
   assert.ok(updatedUser?.passwordHash?.startsWith('$2'));
   assert.ok(updatedAuthUser?.passwordHash?.startsWith('$2'));
 });
 
 test('loginUser returns a structured session token after a successful login', async () => {
+  const passwordHash = await bcrypt.hash('secret123', 10);
   const repository: UserRepository = {
     listUsers: async () => [],
-    getUserById: async () => null,
-    getUserByUsername: async () => ({
+    getUserById: async () => ({
       id: 'user-token',
       fullName: 'Token User',
       username: 'token.user',
-      passwordHash: await bcrypt.hash('secret123', 10),
+      passwordHash,
       role: 'supervisor',
       status: 'active',
       accessToPanel: true,
       createdAt: '2026-07-03T00:00:00.000Z',
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel),
+    getUserByUsername: async () => null,
     createUser: async (user) => user,
     updateUser: async (user) => user,
     deleteUser: async () => undefined,
@@ -164,6 +167,17 @@ test('loginUser returns a structured session token after a successful login', as
     createSession: async () => undefined,
     getSessionByTokenHash: async () => null,
     revokeSession: async () => undefined,
+    getAuthUserByUsername: async (username) => ({
+      id: 'auth-user-token',
+      userId: 'user-token',
+      username,
+      passwordHash,
+      role: 'supervisor',
+      status: 'active',
+      accessToPanel: true,
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    }),
   };
 
   const authenticated = await loginUser(repository, 'token.user', 'secret123', 'admin');
@@ -171,14 +185,40 @@ test('loginUser returns a structured session token after a successful login', as
   assert.match(authenticated.sessionToken, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
 });
 
-test('createUser syncs auth identity and device metadata through the business flow', async () => {
+test('loginUser rejects when auth_users has no matching identity', async () => {
+  const repository: UserRepository = {
+    listUsers: async () => [],
+    getUserById: async () => null,
+    getUserByUsername: async () => {
+      throw new Error('legacy user lookup should not be used');
+    },
+    createUser: async (user) => user,
+    updateUser: async (user) => user,
+    deleteUser: async () => undefined,
+    updateUserRole: async () => null,
+    updateUserStatus: async () => null,
+    createAuditLog: async () => undefined,
+    createSession: async () => undefined,
+    getSessionByTokenHash: async () => null,
+    revokeSession: async () => undefined,
+    getAuthUserByUsername: async () => null,
+  };
+
+  await assert.rejects(() => loginUser(repository, 'usuario.sin.auth', 'secret', 'admin'), /Unauthorized/);
+});
+
+test('createUser persists the new user identity and device metadata in the new model', async () => {
   const createdAuthUsers: Array<NonNullable<UserRepository['upsertAuthUser']> extends (arg: infer A) => any ? A : never> = [];
   const createdDevices: Array<NonNullable<UserRepository['upsertDevice']> extends (arg: infer A) => any ? A : never> = [];
+  const createdUsers: UserModel[] = [];
   const repository: UserRepository = {
     listUsers: async () => [],
     getUserById: async () => null,
     getUserByUsername: async () => null,
-    createUser: async (user) => user,
+    createUser: async (user) => {
+      createdUsers.push(user);
+      return user;
+    },
     updateUser: async (user) => user,
     deleteUser: async () => undefined,
     updateUserRole: async () => null,
@@ -213,12 +253,15 @@ test('createUser syncs auth identity and device metadata through the business fl
     serialNumber2: 'SER-002',
   } as UserModel, 'admin');
 
+  assert.equal(createdUsers[0]?.username, 'diana.torres');
+  assert.equal(createdUsers[0]?.passwordHash?.startsWith('$2'), true);
   assert.equal(createdAuthUsers[0]?.username, 'diana.torres');
   assert.equal(createdAuthUsers[0]?.userId, 'user-9');
   assert.equal(createdDevices[0]?.assignedPhone, '+584145550120');
+  assert.equal(createdDevices[0]?.brandModel, 'Samsung A54');
 });
 
-test('loginUser resolves credentials from auth_users when the legacy lookup is unavailable', async () => {
+test('loginUser resolves credentials from auth_users when the new auth identity is available', async () => {
   const passwordHash = await bcrypt.hash('secret', 10);
   const repository: UserRepository = {
     listUsers: async () => [],
@@ -483,20 +526,21 @@ test('changeUserStatus updates the account status and emits an audit event', asy
 });
 
 test('loginUser does not expose password hashes in the returned user payload', async () => {
+  const passwordHash = await bcrypt.hash('secret', 10);
   const repository: UserRepository = {
     listUsers: async () => [],
-    getUserById: async () => null,
-    getUserByUsername: async () => ({
+    getUserById: async () => ({
       id: 'user-3',
       fullName: 'Marta Díaz',
       username: 'marta.diaz',
-      passwordHash: await bcrypt.hash('secret', 10),
+      passwordHash,
       role: 'admin',
       status: 'active',
       accessToPanel: true,
       createdAt: '2026-07-03T00:00:00.000Z',
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel),
+    getUserByUsername: async () => null,
     createUser: async (user) => user,
     updateUser: async (user) => user,
     deleteUser: async () => undefined,
@@ -506,6 +550,17 @@ test('loginUser does not expose password hashes in the returned user payload', a
     createSession: async () => undefined,
     getSessionByTokenHash: async () => null,
     revokeSession: async () => undefined,
+    getAuthUserByUsername: async (username) => ({
+      id: 'auth-user-3',
+      userId: 'user-3',
+      username,
+      passwordHash,
+      role: 'admin',
+      status: 'active',
+      accessToPanel: true,
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    }),
   };
 
   const authenticated = await loginUser(repository, 'marta.diaz', 'secret', 'admin');
@@ -516,20 +571,21 @@ test('loginUser does not expose password hashes in the returned user payload', a
 });
 
 test('loginUser authenticates only active users with panel access', async () => {
+  const passwordHash = await bcrypt.hash('secret', 10);
   const repository: UserRepository = {
     listUsers: async () => [],
-    getUserById: async () => null,
-    getUserByUsername: async () => ({
+    getUserById: async () => ({
       id: 'user-3',
       fullName: 'Marta Díaz',
       username: 'marta.diaz',
-      passwordHash: await bcrypt.hash('secret', 10),
+      passwordHash,
       role: 'admin',
       status: 'active',
       accessToPanel: true,
       createdAt: '2026-07-03T00:00:00.000Z',
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel),
+    getUserByUsername: async () => null,
     createUser: async (user) => user,
     updateUser: async (user) => user,
     deleteUser: async () => undefined,
@@ -539,6 +595,17 @@ test('loginUser authenticates only active users with panel access', async () => 
     createSession: async () => undefined,
     getSessionByTokenHash: async () => null,
     revokeSession: async () => undefined,
+    getAuthUserByUsername: async (username) => ({
+      id: 'auth-user-active',
+      userId: 'user-3',
+      username,
+      passwordHash,
+      role: 'admin',
+      status: 'active',
+      accessToPanel: true,
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    }),
   };
 
   const authenticated = await loginUser(repository, 'marta.diaz', 'secret', 'admin');

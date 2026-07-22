@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getDatabaseClient } from './connection.js';
+import { getDatabaseClient, resetDatabaseClient } from './connection.js';
 
 export const getUserSchemaMigrationSql = () => `
 DO $$
@@ -134,6 +134,16 @@ BEGIN
       AND column_name = 'channel'
   ) THEN
     ALTER TABLE messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'dashboard';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'messages'
+      AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE messages ADD COLUMN created_at TEXT NOT NULL DEFAULT NOW()::TEXT;
   END IF;
 
   IF NOT EXISTS (
@@ -445,14 +455,67 @@ WHERE s.id IS NOT NULL
 ON CONFLICT (id) DO NOTHING;
 `;
 
+export const getLegacySchemaCleanupSql = () => `
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'users'
+      AND column_name = 'email'
+  ) THEN
+    ALTER TABLE users DROP COLUMN IF EXISTS email;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'migration_verifications'
+  ) THEN
+    DROP TABLE IF EXISTS migration_verifications;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'media_files'
+  ) THEN
+    DROP TABLE IF EXISTS media_files;
+  END IF;
+END $$;
+`;
+
 export const initializeDatabase = async () => {
-  const db = await getDatabaseClient();
+  const db = await getDatabaseClient({ skipSchemaValidation: true });
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   const scriptPath = path.resolve(__dirname, 'init.sql');
   const sql = await fs.readFile(scriptPath, 'utf8');
 
   await db.query(getUserSchemaMigrationSql());
+  await db.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'messages') THEN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'messages'
+            AND column_name = 'created_at'
+        ) THEN
+          ALTER TABLE messages ADD COLUMN created_at TEXT NOT NULL DEFAULT NOW()::TEXT;
+        END IF;
+      END IF;
+    END $$;
+  `);
   await db.query(sql);
   await db.query(getDataBackfillSql());
+  await db.query(getLegacySchemaCleanupSql());
+
+  resetDatabaseClient();
+  await getDatabaseClient();
 };

@@ -102,16 +102,28 @@ class InMemoryUserRepository implements UserRepository {
 
   seedAdminUser(): void {
     const passwordHash = bcrypt.hashSync('secret', 10);
-    this.users.set('admin-user', {
+    const user = {
       id: 'admin-user',
       fullName: 'Admin Principal',
       username: 'admin',
       passwordHash,
-      role: 'admin',
-      status: 'active',
+      role: 'admin' as const,
+      status: 'active' as const,
       accessToPanel: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+    };
+    this.users.set('admin-user', user);
+    this.authUsers.set('admin', {
+      id: 'auth-admin-user',
+      userId: user.id,
+      username: user.username,
+      passwordHash,
+      role: user.role,
+      status: user.status,
+      accessToPanel: user.accessToPanel,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     });
   }
 }

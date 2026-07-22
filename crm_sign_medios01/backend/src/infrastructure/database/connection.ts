@@ -1,6 +1,7 @@
 import { config } from '../../common/config.js';
 import { buildTableStatusRows, type DatabaseStatus } from '../../domain/database.js';
 import pkg from 'pg';
+import { getRequiredSchema, validateRequiredSchema } from './schema.js';
 
 const { Pool } = pkg;
 
@@ -11,7 +12,44 @@ export interface DatabaseClient {
 
 let client: DatabaseClient | null = null;
 
-export const getDatabaseClient = async (): Promise<DatabaseClient> => {
+export interface GetDatabaseClientOptions {
+  skipSchemaValidation?: boolean;
+}
+
+export const resetDatabaseClient = () => {
+  client = null;
+};
+
+export const validateDatabaseSchema = async (db: DatabaseClient, options?: GetDatabaseClientOptions): Promise<void> => {
+  if (options?.skipSchemaValidation) {
+    return;
+  }
+
+  const schemaRows = (await db.query(
+    `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
+  )) as Array<{ table_name: string }>;
+  const existingTables = new Set(schemaRows.map((row) => row.table_name));
+  const presentSchema: Record<string, string[]> = {};
+
+  for (const table of getRequiredSchema()) {
+    if (!existingTables.has(table.name)) {
+      throw new Error(`Missing required table: ${table.name}`);
+    }
+
+    const columnsRows = (await db.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+      [table.name],
+    )) as Array<{ column_name: string }>;
+    presentSchema[table.name] = columnsRows.map((row) => row.column_name);
+  }
+
+  const schemaIssues = validateRequiredSchema(getRequiredSchema(), presentSchema);
+  if (schemaIssues.length > 0) {
+    throw new Error(`New schema validation failed: ${schemaIssues.join('; ')}`);
+  }
+};
+
+export const getDatabaseClient = async (options?: GetDatabaseClientOptions): Promise<DatabaseClient> => {
   if (client) {
     return client;
   }
@@ -46,6 +84,8 @@ export const getDatabaseClient = async (): Promise<DatabaseClient> => {
     },
   };
 
+  await validateDatabaseSchema(client, options);
+
   return client;
 };
 
@@ -57,7 +97,7 @@ export const getDatabaseStatus = async (): Promise<DatabaseStatus> => {
     )) as Array<{ table_name: string }>;
 
     const existingTables = rows.map((row) => row.table_name);
-    const requiredTables = ['agents', 'conversations', 'messages'];
+    const requiredTables = ['users', 'auth_users', 'devices', 'conversations', 'messages', 'contacts', 'user_sessions', 'audit_logs'];
 
     return {
       connected: true,

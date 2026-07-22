@@ -2,34 +2,51 @@ import type { AgentModel, ConversationModel, MessageModel, UserModel, AuthUserMo
 import type { AgentRepository, ConversationRepository, MessageRepository, UserRepository, ContactRepository } from '../../domain/repositories.js';
 import { getDatabaseClient } from './connection.js';
 
+export const buildAssignedPhone = (userId: string): string => {
+  const normalized = userId.replace(/[^a-z0-9]/gi, '').slice(0, 12);
+  const suffix = `${Date.now().toString().slice(-6)}${Math.random().toString().slice(2, 6)}`;
+  return `+${normalized || 'user'}${suffix}`;
+};
+
 export class PostgresAgentRepository implements AgentRepository {
   async list(): Promise<AgentModel[]> {
     const db = await getDatabaseClient();
-    // Get agents from the agents table - agents are created when users with role "Agente" are created/updated
-    const rows = await db.query('SELECT id, name, role, phone, avatar, initials, online FROM agents ORDER BY name');
+    const rows = await db.query(
+      `SELECT u.id, u.full_name AS name, u.role, d.assigned_phone AS phone, u.foto AS avatar, u.initials, u.online
+       FROM users u
+       LEFT JOIN devices d ON d.user_id = u.id
+       WHERE u.role IN ('agent', 'supervisor', 'admin')
+       ORDER BY u.full_name`,
+    );
     return rows as AgentModel[];
   }
 
   async getById(id: string): Promise<AgentModel | null> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, name, role, phone, avatar, initials, online FROM agents WHERE id = $1', [id]);
+    const rows = await db.query(
+      `SELECT u.id, u.full_name AS name, u.role, d.assigned_phone AS phone, u.foto AS avatar, u.initials, u.online
+       FROM users u
+       LEFT JOIN devices d ON d.user_id = u.id
+       WHERE u.id = $1`,
+      [id],
+    );
     return (rows[0] as AgentModel | undefined) ?? null;
   }
 
   async create(agent: AgentModel): Promise<AgentModel> {
     const db = await getDatabaseClient();
+    const now = new Date().toISOString();
     await db.query(
-      `INSERT INTO agents (id, user_id, name, role, phone, avatar, initials, online)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at, initials, online, foto)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (id) DO UPDATE SET
-         user_id = EXCLUDED.user_id,
-         name = EXCLUDED.name,
+         full_name = EXCLUDED.full_name,
          role = EXCLUDED.role,
-         phone = COALESCE(EXCLUDED.phone, agents.phone),
-         avatar = COALESCE(EXCLUDED.avatar, agents.avatar),
-         initials = COALESCE(EXCLUDED.initials, agents.initials),
-         online = EXCLUDED.online`,
-      [agent.id, agent.id, agent.name, agent.role, agent.phone ?? null, agent.avatar ?? null, agent.initials ?? null, agent.online],
+         updated_at = EXCLUDED.updated_at,
+         initials = EXCLUDED.initials,
+         online = EXCLUDED.online,
+         foto = EXCLUDED.foto`,
+      [agent.id, agent.name, agent.id, '', agent.role, 'active', false, now, now, agent.initials ?? null, agent.online, agent.avatar ?? null],
     );
     return agent;
   }
@@ -141,11 +158,12 @@ export class PostgresUserRepository implements UserRepository {
     const roleLower = user.role?.toLowerCase?.() ?? '';
     if (roleLower === 'agent' || roleLower === 'supervisor') {
       const deviceId = `device-${user.id}`;
+      const assignedPhone = buildAssignedPhone(user.id);
       await db.query(
         `INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (id) DO NOTHING`,
-        [deviceId, user.id, 'Migrated from legacy system', `serial-${user.id}`, null, `+000000000000`],
+        [deviceId, user.id, 'Migrated from legacy system', `serial-${user.id}`, null, assignedPhone],
       );
 
       await db.query(
@@ -341,6 +359,7 @@ export class PostgresUserRepository implements UserRepository {
   async upsertDevice(device: DeviceModel): Promise<DeviceModel> {
     const db = await getDatabaseClient();
     const id = device.id || `device-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const assignedPhone = device.assignedPhone ?? buildAssignedPhone(device.userId);
     await db.query(
       `INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -349,9 +368,9 @@ export class PostgresUserRepository implements UserRepository {
          serial_number_1 = EXCLUDED.serial_number_1,
          serial_number_2 = EXCLUDED.serial_number_2,
          assigned_phone = EXCLUDED.assigned_phone`,
-      [id, device.userId, device.brandModel ?? 'Migrated from legacy system', device.serialNumber1 ?? `serial-${device.userId}`, device.serialNumber2 ?? null, device.assignedPhone ?? null],
+      [id, device.userId, device.brandModel ?? 'Migrated from legacy system', device.serialNumber1 ?? `serial-${device.userId}`, device.serialNumber2 ?? null, assignedPhone],
     );
-    return { ...device, id };
+    return { ...device, id, assignedPhone };
   }
 }
 

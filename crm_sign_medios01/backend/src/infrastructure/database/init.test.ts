@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import bcrypt from 'bcrypt';
-import { getDataBackfillSql, getUserSchemaMigrationSql } from './init.js';
+import { getDataBackfillSql, getLegacySchemaCleanupSql, getUserSchemaMigrationSql } from './init.js';
 
 test('default admin seed uses a bcrypt hash that matches the secret password', async () => {
   const __filename = fileURLToPath(import.meta.url);
@@ -28,6 +28,14 @@ test('initialization script creates the new auth and device tables needed for th
   assert.match(sql, /CREATE TABLE IF NOT EXISTS devices/i);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS media_files/i);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS user_sessions/i);
+});
+
+test('messages table includes the created_at column required by the new schema validation', async () => {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const sql = await fs.readFile(path.resolve(__dirname, 'init.sql'), 'utf8');
+
+  assert.match(sql, /ALTER TABLE messages ADD COLUMN IF NOT EXISTS created_at TEXT NOT NULL DEFAULT now\(\)::text/i);
 });
 
 test('user schema migration includes real data migration into auth_users, devices and audit_logs', () => {
@@ -56,6 +64,14 @@ test('schema migration backfills contacts and message fields from existing recor
   assert.match(migrationSql, /INSERT INTO user_sessions/i);
 });
 
+test('legacy schema cleanup removes obsolete tables and columns', () => {
+  const cleanupSql = getLegacySchemaCleanupSql();
+
+  assert.match(cleanupSql, /ALTER TABLE users DROP COLUMN IF EXISTS email/i);
+  assert.match(cleanupSql, /DROP TABLE IF EXISTS migration_verifications/i);
+  assert.match(cleanupSql, /DROP TABLE IF EXISTS media_files/i);
+});
+
 test('data backfill registers verification rows for migrated records', () => {
   const migrationSql = getDataBackfillSql();
 
@@ -64,9 +80,10 @@ test('data backfill registers verification rows for migrated records', () => {
   assert.match(migrationSql, /status/i);
 });
 
-test('user schema migration keeps agents aligned to users through the compatibility layer', () => {
+test('user schema migration keeps the new auth and device tables aligned with the new model', () => {
   const migrationSql = getUserSchemaMigrationSql();
 
-  assert.match(migrationSql, /INSERT INTO agents/i);
-  assert.match(migrationSql, /user_id = EXCLUDED.user_id/i);
+  assert.match(migrationSql, /INSERT INTO auth_users/i);
+  assert.match(migrationSql, /INSERT INTO devices/i);
+  assert.match(migrationSql, /INSERT INTO audit_logs/i);
 });

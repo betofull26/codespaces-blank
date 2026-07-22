@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS backups (
 export const backupExportQueries = {
   agents: {
     name: 'agents',
-    sql: `SELECT id, name, role, phone, avatar, initials, online FROM agents ORDER BY name`,
+    sql: `SELECT u.id, u.full_name AS name, u.role, d.assigned_phone AS phone, u.foto AS avatar, u.initials, u.online FROM users u LEFT JOIN devices d ON d.user_id = u.id WHERE u.role IN ('agent', 'supervisor', 'admin') ORDER BY u.full_name`,
   },
   conversations: {
     name: 'conversations',
@@ -25,6 +25,6 @@ export const backupExportQueries = {
   },
   contacts: {
     name: 'contacts',
-    sql: `SELECT a.name AS nombre_usuario, c.phone AS telefono_cliente, c.name AS nombre_cliente FROM contacts c LEFT JOIN agents a ON a.id = c.agent_id ORDER BY c.name`,
+    sql: `SELECT u.full_name AS nombre_usuario, c.phone AS telefono_cliente, c.name AS nombre_cliente FROM contacts c LEFT JOIN users u ON u.id = c.agent_id ORDER BY c.name`,
   },
 };

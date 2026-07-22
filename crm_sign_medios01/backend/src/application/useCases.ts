@@ -1,6 +1,16 @@
 import type { AgentRepository, ConversationRepository, MessageRepository } from '../domain/repositories.js';
 import { validateAgent, validateConversation, validateMessage, type AgentModel, type ConversationModel, type MessageModel } from '../domain/models.js';
 
+export const listConversationsByAgent = async (
+  repository: ConversationRepository,
+  agentId: string,
+): Promise<ConversationModel[]> => repository.getByAgentId(agentId);
+
+export const listMessagesByConversationId = async (
+  repository: MessageRepository,
+  conversationId: string,
+): Promise<MessageModel[]> => repository.listByConversationId(conversationId);
+
 export interface WhatsAppInboundPayload {
   phone?: string;
   clientName?: string;
@@ -19,11 +29,6 @@ export const getConversationsByAgentId = async (
   repository: ConversationRepository,
   agentId: string,
 ): Promise<ConversationModel[]> => repository.getByAgentId(agentId);
-
-export const listMessagesByConversationId = async (
-  repository: MessageRepository,
-  conversationId: string,
-): Promise<MessageModel[]> => repository.listByConversationId(conversationId);
 
 export const createMessage = async (
   repository: MessageRepository,

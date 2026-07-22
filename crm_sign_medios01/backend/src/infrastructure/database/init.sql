@@ -107,11 +107,14 @@ CREATE TABLE IF NOT EXISTS messages (
   text_body TEXT,
   media_file_id TEXT,
   channel TEXT NOT NULL DEFAULT 'dashboard',
+  created_at TEXT NOT NULL DEFAULT now()::text,
   CONSTRAINT fk_messages_conversation
     FOREIGN KEY (conversation_id) REFERENCES conversations(id)
     ON DELETE CASCADE
     ON UPDATE CASCADE
 );
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS created_at TEXT NOT NULL DEFAULT now()::text;
 
 CREATE TABLE IF NOT EXISTS media_files (
   id TEXT PRIMARY KEY,
