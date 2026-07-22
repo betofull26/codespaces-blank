@@ -43,34 +43,39 @@ export interface DeviceModel {
   assignedPhone?: string | null;
 }
 
-export interface UserModel {
+export interface UserProfileModel {
   id: string;
   fullName: string;
-  username: string;
-  passwordHash: string;
-  role: 'admin' | 'agent' | 'supervisor';
-  status: 'active' | 'inactive' | 'suspended';
-  accessToPanel: boolean;
-  createdAt: string;
-  updatedAt: string;
-  assignedPhone?: string | null;
-  deviceModel?: string | null;
-  serialNumber?: string | null;
-  serialNumber2?: string | null;
+  position?: string | null;
   entryDate?: string | null;
-  photo?: string | null;
+  foto?: string | null;
+  initials?: string | null;
+  online: boolean;
+  createdAt: string;
+  updatedAt?: string | null;
 }
+
+export interface UserModel extends UserProfileModel {}
 
 export interface AuthUserModel {
   id: string;
   userId: string;
   username: string;
   passwordHash: string;
-  role: UserModel['role'];
-  status: UserModel['status'];
+  role: 'admin' | 'agent' | 'supervisor';
+  status: 'active' | 'inactive' | 'suspended';
   accessToPanel: boolean;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string | null;
+}
+
+export interface UserWithAuthModel extends UserProfileModel {
+  authId: string;
+  username: string;
+  passwordHash: string;
+  role: 'admin' | 'agent' | 'supervisor';
+  status: 'active' | 'inactive' | 'suspended';
+  accessToPanel: boolean;
 }
 
 export interface AuditLogModel {
@@ -78,19 +83,18 @@ export interface AuditLogModel {
   entityType: string;
   entityId: string;
   action: string;
-  performedBy: string;
+  userId: string;
   details: string;
   createdAt: string;
 }
 
 export interface SessionModel {
   id: string;
-  userId: string;
+  authUserId: string;
   tokenHash: string;
-  role: 'admin' | 'agent' | 'supervisor';
   expiresAt: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string | null;
   revokedAt?: string | null;
 }
 

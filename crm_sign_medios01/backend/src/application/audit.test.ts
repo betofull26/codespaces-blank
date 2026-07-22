@@ -13,5 +13,5 @@ test('createAuditEntry builds a traceable audit record', () => {
   const entry = createAuditEntry('user', 'user-1', 'change_role', 'admin', { reason: 'promoted' });
   assert.equal(entry.entityType, 'user');
   assert.equal(entry.action, 'change_role');
-  assert.equal(entry.performedBy, 'admin');
+  assert.equal(entry.userId, 'admin');
 });

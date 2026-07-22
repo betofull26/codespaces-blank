@@ -6,6 +6,12 @@ import { createAuditEntry, createRoleHistoryEntry } from './audit.js';
 
 const hashToken = (token: string): string => crypto.createHash('sha256').update(token).digest('hex');
 
+const buildAssignedPhone = (userId: string): string => {
+  const normalized = userId.replace(/[^a-z0-9]/gi, '').slice(0, 12);
+  const suffix = `${Date.now().toString().slice(-6)}${Math.random().toString().slice(2, 6)}`;
+  return `+${normalized || 'user'}${suffix}`;
+};
+
 export const validateLoginPayload = (payload: unknown): { username: string; password: string } => {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Invalid login payload');
@@ -71,19 +77,7 @@ const resolveUserLabel = (user: Pick<UserModel, 'username' | 'fullName' | 'role'
   return user.role === 'agent' ? user.fullName : user.username;
 };
 
-const syncAuthIdentityAndDevice = async (repository: UserRepository, user: Pick<UserModel, 'id' | 'username' | 'passwordHash' | 'role' | 'status' | 'accessToPanel' | 'createdAt' | 'updatedAt' | 'assignedPhone' | 'deviceModel' | 'serialNumber' | 'serialNumber2'>): Promise<void> => {
-  const authUser: AuthUserModel = {
-    id: `auth-${user.id}`,
-    userId: user.id,
-    username: user.username,
-    passwordHash: user.passwordHash,
-    role: user.role,
-    status: user.status,
-    accessToPanel: user.accessToPanel,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  };
-
+const syncAuthIdentityAndDevice = async (repository: UserRepository, user: UserModel, authUser: AuthUserModel): Promise<void> => {
   if (typeof repository.upsertAuthUser === 'function') {
     await repository.upsertAuthUser(authUser);
   }
@@ -92,10 +86,10 @@ const syncAuthIdentityAndDevice = async (repository: UserRepository, user: Pick<
     const device: DeviceModel = {
       id: `device-${user.id}`,
       userId: user.id,
-      brandModel: user.deviceModel ?? null,
-      serialNumber1: user.serialNumber ?? null,
-      serialNumber2: user.serialNumber2 ?? null,
-      assignedPhone: user.assignedPhone ?? null,
+      brandModel: 'Migrated from legacy system',
+      serialNumber1: `serial-${user.id}`,
+      serialNumber2: null,
+      assignedPhone: buildAssignedPhone(user.id),
     };
     await repository.upsertDevice(device);
   }
@@ -106,16 +100,16 @@ export const logAuditEvent = async (
   entityType: string,
   entityId: string,
   action: string,
-  performedBy: string,
+  userId: string,
   details: Record<string, unknown>,
 ): Promise<void> => {
-  const auditEntry = createAuditEntry(entityType, entityId, action, performedBy, details);
+  const auditEntry = createAuditEntry(entityType, entityId, action, userId, details);
   await repository.createAuditLog({
     id: auditEntry.id,
     entityType: auditEntry.entityType,
     entityId: auditEntry.entityId,
     action: auditEntry.action,
-    performedBy: auditEntry.performedBy,
+    userId: auditEntry.userId,
     details: auditEntry.details,
     createdAt: auditEntry.createdAt,
   });
@@ -123,41 +117,47 @@ export const logAuditEvent = async (
 
 export const createUser = async (
   repository: UserRepository,
-  user: UserModel,
+  userProfile: UserModel,
+  authData: { username: string; passwordHash: string; role: 'admin' | 'agent' | 'supervisor'; accessToPanel?: boolean },
   actorId: string,
 ): Promise<UserModel> => {
   const now = new Date().toISOString();
-  const userId = user.id || `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const userId = userProfile.id || `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  const passwordHash = await hashPasswordIfNeeded(user.passwordHash);
-
-  // Generate username for agents if empty
-  const roleLower = user.role?.toLowerCase?.();
-  const isAgent = roleLower === 'agente' || roleLower === 'agent';
-  const generatedUsername = !user.username || !user.username.trim() 
-    ? (isAgent ? `agent_${userId.replace(/[^a-z0-9]/g, '')}` : user.username)
-    : user.username;
+  const passwordHash = await hashPasswordIfNeeded(authData.passwordHash);
 
   const userToCreate: UserModel = {
-    ...user,
+    ...userProfile,
     id: userId,
-    username: generatedUsername,
-    passwordHash,
-    createdAt: user.createdAt || now,
-    updatedAt: user.updatedAt || now,
+    createdAt: userProfile.createdAt || now,
+    updatedAt: userProfile.updatedAt || now,
+    online: userProfile.online ?? false,
   };
 
   const created = await repository.createUser(userToCreate);
-  await syncAuthIdentityAndDevice(repository, created);
+  
+  const authUser: AuthUserModel = {
+    id: `auth-${userId}`,
+    userId: userId,
+    username: authData.username,
+    passwordHash,
+    role: authData.role,
+    status: 'active',
+    accessToPanel: authData.accessToPanel ?? (authData.role !== 'agent'),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await syncAuthIdentityAndDevice(repository, created, authUser);
 
   const actorUsername = await resolveActorUsername(repository, actorId);
 
   await logAuditEvent(repository, 'user', created.id, 'create_user', actorId, {
     actorUsername,
-    username: created.username,
+    username: authData.username,
     fullName: created.fullName,
-    role: created.role,
-    accessToPanel: created.accessToPanel,
+    role: authData.role,
+    accessToPanel: authUser.accessToPanel,
   });
 
   return created;
@@ -166,7 +166,7 @@ export const createUser = async (
 export const changeUserRole = async (
   repository: UserRepository,
   userId: string,
-  nextRole: UserModel['role'],
+  nextRole: 'admin' | 'agent' | 'supervisor',
   actorId: string,
 ): Promise<UserModel> => {
   const current = await repository.getUserById(userId);
@@ -179,17 +179,25 @@ export const changeUserRole = async (
     throw new Error('Failed to update role');
   }
 
-  await syncAuthIdentityAndDevice(repository, updated);
+  const authUser: AuthUserModel = {
+    id: `auth-${userId}`,
+    userId: userId,
+    username: '',
+    passwordHash: '',
+    role: nextRole,
+    status: 'active',
+    accessToPanel: nextRole !== 'agent',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await syncAuthIdentityAndDevice(repository, updated, authUser);
 
   const actorUsername = await resolveActorUsername(repository, actorId);
-  const targetUserLabel = resolveUserLabel(updated);
-  const roleHistoryEntry = createRoleHistoryEntry(updated.id, current.role, updated.role, actorId, 'Cambio de rol');
+  const targetUserLabel = current.fullName;
   await logAuditEvent(repository, 'user', updated.id, 'change_role', actorId, {
     actorUsername,
     targetUserLabel,
-    previousRole: current.role,
-    newRole: updated.role,
-    historyId: roleHistoryEntry.id,
+    newRole: nextRole,
   });
 
   return updated;
@@ -197,24 +205,20 @@ export const changeUserRole = async (
 
 export const updateUser = async (
   repository: UserRepository,
-  user: UserModel,
+  userProfile: UserModel,
   actorId: string,
 ): Promise<UserModel> => {
-  const current = await repository.getUserById(user.id);
+  const current = await repository.getUserById(userProfile.id);
   if (!current) {
     throw new Error('User not found');
   }
 
-  const passwordHash = await hashPasswordIfNeeded(user.passwordHash);
-
   const userToUpdate: UserModel = {
-    ...user,
-    passwordHash,
+    ...userProfile,
     updatedAt: new Date().toISOString(),
   };
 
   const updated = await repository.updateUser(userToUpdate);
-  await syncAuthIdentityAndDevice(repository, updated);
   const actorUsername = await resolveActorUsername(repository, actorId);
 
   await repository.createAuditLog({
@@ -222,13 +226,13 @@ export const updateUser = async (
     entityType: 'user',
     entityId: updated.id,
     action: 'update_user',
-    performedBy: actorId,
+    userId: actorId,
     details: JSON.stringify({
       actorUsername,
-      previousUsername: current.username,
-      newUsername: updated.username,
+      fullName: updated.fullName,
+      previousName: current.fullName,
     }),
-    createdAt: updated.updatedAt,
+    createdAt: updated.updatedAt || new Date().toISOString(),
   });
 
   return updated;
@@ -237,7 +241,7 @@ export const updateUser = async (
 export const changeUserStatus = async (
   repository: UserRepository,
   userId: string,
-  nextStatus: UserModel['status'],
+  nextStatus: 'active' | 'inactive' | 'suspended',
   actorId: string,
 ): Promise<UserModel> => {
   const current = await repository.getUserById(userId);
@@ -250,13 +254,23 @@ export const changeUserStatus = async (
     throw new Error('Failed to update status');
   }
 
-  await syncAuthIdentityAndDevice(repository, updated);
+  const authUser: AuthUserModel = {
+    id: `auth-${userId}`,
+    userId: userId,
+    username: '',
+    passwordHash: '',
+    role: 'agent',
+    status: nextStatus,
+    accessToPanel: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await syncAuthIdentityAndDevice(repository, updated, authUser);
 
   const actorUsername = await resolveActorUsername(repository, actorId);
   await logAuditEvent(repository, 'user', updated.id, 'change_status', actorId, {
     actorUsername,
-    previousStatus: current.status,
-    newStatus: updated.status,
+    newStatus: nextStatus,
   });
 
   return updated;
@@ -273,16 +287,11 @@ export const deleteUser = async (
   }
 
   const actorUsername = await resolveActorUsername(repository, actorId);
-  const targetUserLabel = resolveUserLabel(current);
   await repository.deleteUser(userId);
 
   await logAuditEvent(repository, 'user', userId, 'delete_user', actorId, {
     actorUsername,
-    targetUserLabel,
     deletedUser: current.fullName,
-    previousRole: current.role,
-    previousStatus: current.status,
-    accessToPanelRevoked: current.accessToPanel,
   });
 };
 
@@ -293,7 +302,7 @@ export const buildSessionToken = (userId: string, role: string): string => {
   return `${header}.${payload}.${signature}`;
 };
 
-export const createSessionRecord = async (repository: UserRepository, token: string, userId: string, role: UserModel['role']): Promise<void> => {
+export const createSessionRecord = async (repository: UserRepository, token: string, authUserId: string): Promise<void> => {
   if (typeof repository.createSession !== 'function') {
     return;
   }
@@ -302,9 +311,8 @@ export const createSessionRecord = async (repository: UserRepository, token: str
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString();
   await repository.createSession({
     id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-    userId,
+    authUserId,
     tokenHash: hashToken(token),
-    role,
     expiresAt,
     createdAt: now,
     updatedAt: now,
@@ -325,7 +333,7 @@ export const logLogoutAudit = async (repository: UserRepository, userId: string,
     entityType: auditEntry.entityType,
     entityId: auditEntry.entityId,
     action: auditEntry.action,
-    performedBy: auditEntry.performedBy,
+    userId: auditEntry.userId,
     details: auditEntry.details,
     createdAt: auditEntry.createdAt,
   });
@@ -383,7 +391,7 @@ export const loginUser = async (
   username: string,
   password: string,
   actorId: string,
-): Promise<{ user: Omit<UserModel, 'passwordHash'>; sessionToken: string }> => {
+): Promise<{ user: UserProfileModel; sessionToken: string }> => {
   const authUser = typeof repository.getAuthUserByUsername === 'function'
     ? await repository.getAuthUserByUsername(username)
     : null;
@@ -392,11 +400,11 @@ export const loginUser = async (
     ? await repository.getUserById(authUser.userId)
     : null;
 
-  if (!user || user.status !== 'active' || !user.accessToPanel) {
+  if (!user || !authUser || authUser.status !== 'active' || !authUser.accessToPanel) {
     throw new Error('Unauthorized');
   }
 
-  const storedPasswordHash = authUser?.passwordHash ?? user.passwordHash;
+  const storedPasswordHash = authUser.passwordHash;
   const matches = await passwordMatches(password, storedPasswordHash);
 
   if (!matches) {
@@ -406,30 +414,23 @@ export const loginUser = async (
   const nextHashedPassword = await hashPasswordIfNeeded(password);
   const needsPasswordMigration = !isBcryptHash(storedPasswordHash);
 
-  if (needsPasswordMigration) {
-    const migratedUser = {
-      ...user,
+  if (needsPasswordMigration && typeof repository.upsertAuthUser === 'function') {
+    await repository.upsertAuthUser({
+      ...authUser,
       passwordHash: nextHashedPassword,
       updatedAt: new Date().toISOString(),
-    };
-    await repository.updateUser(migratedUser);
-    if (authUser && typeof repository.upsertAuthUser === 'function') {
-      await repository.upsertAuthUser({
-        ...authUser,
-        passwordHash: nextHashedPassword,
-        updatedAt: migratedUser.updatedAt,
-      });
-    }
+    });
   }
 
   await logAuditEvent(repository, 'credential', user.id, 'login', actorId, { username });
 
-  const { passwordHash: _passwordHash, ...safeUser } = user;
-  const sessionToken = buildSessionToken(user.id, user.role);
-  await createSessionRecord(repository, sessionToken, user.id, user.role);
+  const sessionToken = buildSessionToken(user.id, authUser.role);
+  if (typeof repository.createSession === 'function') {
+    await createSessionRecord(repository, sessionToken, authUser.id);
+  }
 
   return {
-    user: safeUser,
+    user,
     sessionToken,
   };
 };

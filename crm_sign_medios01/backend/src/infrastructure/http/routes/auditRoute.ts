@@ -37,7 +37,7 @@ auditRouter.get('/audit-logs', requireAuthAndAuditAccess, async (_req, res) => {
     const db = await getDatabaseClient();
     await ensureAuditTableExists(db);
     const rows = await db.query(
-      'SELECT id, entity_type AS "entityType", entity_id AS "entityId", action, performed_by AS "performedBy", user_id AS "userId", details, created_at AS "createdAt" FROM audit_logs ORDER BY created_at DESC LIMIT 100',
+      'SELECT id, entity_type AS "entityType", entity_id AS "entityId", action, user_id AS "userId", details, created_at AS "createdAt" FROM audit_logs ORDER BY created_at DESC LIMIT 100',
     );
 
     res.json(buildSuccessResponse(rows, 'Registro de actividad obtenido correctamente'));

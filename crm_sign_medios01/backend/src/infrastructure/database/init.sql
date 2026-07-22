@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
   initials TEXT,
   online BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+  updated_at TIMESTAMP WITH TIME ZONE
 );
 
 CREATE TABLE IF NOT EXISTS auth_users (
@@ -100,38 +100,35 @@ CREATE TABLE IF NOT EXISTS media_files (
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
-  id TEXT PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_type TEXT NOT NULL,
-  entity_id TEXT NOT NULL,
+  entity_id UUID NOT NULL,
   action TEXT NOT NULL,
-  performed_by TEXT NOT NULL,
-  user_id TEXT,
+  user_id UUID NOT NULL,
   details TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT fk_audit_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS backups (
-  id TEXT PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   backup_type TEXT NOT NULL,
   file_name TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'success', 'failed')),
   file_path TEXT,
   file_url TEXT
 );
 
 CREATE TABLE IF NOT EXISTS user_sessions (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  auth_user_id TEXT,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_user_id UUID NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
-  role TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  revoked_at TEXT,
-  CONSTRAINT fk_user_sessions_auth_user FOREIGN KEY (auth_user_id) REFERENCES auth_users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT fk_user_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE,
+  revoked_at TIMESTAMP WITH TIME ZONE,
+  CONSTRAINT fk_user_sessions_auth_user FOREIGN KEY (auth_user_id) REFERENCES auth_users(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 INSERT INTO users (id, full_name, position, entry_date, foto, initials, online, created_at, updated_at)
@@ -160,11 +157,11 @@ SELECT concat('device-', id), id, 'Migrated from legacy system', concat('serial-
 FROM users
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, user_id, details, created_at)
-SELECT concat('audit-init-', id), 'user', id, 'create_user', id, id, jsonb_build_object('source', 'migration', 'message', 'Migrated from legacy users table')::text, COALESCE(created_at, now()::text)
+INSERT INTO audit_logs (id, entity_type, entity_id, action, user_id, details, created_at)
+SELECT gen_random_uuid(), 'user', id, 'create_user', id, jsonb_build_object('source', 'migration', 'message', 'Migrated from legacy users table')::text, COALESCE(created_at, NOW())
 FROM users
 WHERE id IS NOT NULL
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO conversations (id, user_id, client_name, topic, status, start_time)
 VALUES

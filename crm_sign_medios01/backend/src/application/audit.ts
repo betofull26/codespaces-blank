@@ -13,7 +13,7 @@ export interface AuditEntry {
   entityType: string;
   entityId: string;
   action: string;
-  performedBy: string;
+  userId: string;
   details: string;
   createdAt: string;
 }
@@ -38,14 +38,14 @@ export const createAuditEntry = (
   entityType: string,
   entityId: string,
   action: string,
-  performedBy: string,
+  userId: string,
   details: Record<string, unknown>,
 ): AuditEntry => ({
   id: `audit-${entityId}-${action}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   entityType,
   entityId,
   action,
-  performedBy,
+  userId,
   details: JSON.stringify(details),
   createdAt: new Date().toISOString(),
 });

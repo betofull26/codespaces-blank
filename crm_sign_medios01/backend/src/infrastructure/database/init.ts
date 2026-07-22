@@ -156,15 +156,7 @@ BEGIN
     ALTER TABLE audit_logs ADD COLUMN user_id TEXT;
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'user_sessions'
-      AND column_name = 'auth_user_id'
-  ) THEN
-    ALTER TABLE user_sessions ADD COLUMN auth_user_id TEXT;
-  END IF;
+
 
   IF EXISTS (
     SELECT 1
@@ -250,15 +242,7 @@ BEGIN
     ALTER TABLE user_sessions ADD CONSTRAINT fk_user_sessions_auth_user FOREIGN KEY (auth_user_id) REFERENCES auth_users(id) ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM information_schema.table_constraints
-    WHERE table_schema = 'public'
-      AND table_name = 'user_sessions'
-      AND constraint_name = 'fk_user_sessions_user'
-  ) THEN
-    ALTER TABLE user_sessions ADD CONSTRAINT fk_user_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE;
-  END IF;
+
 END $$;
 
 CREATE TABLE IF NOT EXISTS auth_users (
@@ -387,21 +371,19 @@ SET content_type = 'text',
     channel = COALESCE(NULLIF(channel, ''), COALESCE(NULLIF(source, ''), 'dashboard'))
 WHERE id IS NOT NULL;
 
-INSERT INTO user_sessions (id, user_id, auth_user_id, token_hash, role, expires_at, created_at, updated_at, revoked_at)
+INSERT INTO user_sessions (id, auth_user_id, token_hash, expires_at, created_at, updated_at, revoked_at)
 SELECT
-  concat('session-', a.id),
-  a.user_id,
+  gen_random_uuid(),
   a.id,
   concat('session-token-', a.id),
-  COALESCE(NULLIF(a.role, ''), 'agent'),
-  (NOW() + INTERVAL '24 hours')::TEXT,
-  NOW()::TEXT,
-  NOW()::TEXT,
+  (NOW() + INTERVAL '24 hours'),
+  NOW(),
+  NOW(),
   NULL
 FROM auth_users a
 LEFT JOIN user_sessions existing_session ON existing_session.auth_user_id = a.id
 WHERE existing_session.id IS NULL
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO migration_verifications (id, table_name, record_id, status, details, created_at)
 SELECT concat('verify-users-', u.id), 'users', u.id, 'verified', 'user row migrated to new schema', NOW()::TEXT
