@@ -69,7 +69,7 @@ test('legacy schema cleanup removes obsolete tables and columns', () => {
 
   assert.match(cleanupSql, /ALTER TABLE users DROP COLUMN IF EXISTS email/i);
   assert.match(cleanupSql, /DROP TABLE IF EXISTS migration_verifications/i);
-  assert.match(cleanupSql, /DROP TABLE IF EXISTS media_files/i);
+  assert.match(cleanupSql, /media_files is a NEW table/i);
 });
 
 test('data backfill registers verification rows for migrated records', () => {

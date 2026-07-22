@@ -56,7 +56,19 @@ userManagementRouter.post('/users', async (req: AuthenticatedRequest, res: Respo
     ensureAuthorized(role, 'manage-users');
     const repository = getUserRepository();
     const actorId = typeof req.body?.actorId === 'string' ? req.body.actorId : 'system';
-    const user = await createUser(repository, req.body, actorId);
+    
+    // Map request fields to internal model with defaults
+    const userPayload = {
+      ...req.body,
+      fullName: req.body.name || req.body.fullName || '',
+      username: req.body.username || req.body.email?.split('@')[0] || `user-${Date.now()}`,
+      passwordHash: req.body.password || req.body.passwordHash || '',
+      status: req.body.status || 'active',
+      role: req.body.role || 'agent',
+      accessToPanel: req.body.accessToPanel !== false,
+    };
+    
+    const user = await createUser(repository, userPayload, actorId);
     await logAuditEvent(repository, 'user', user.id, 'create_user_route', actorId, { source: 'real-route', requestedBy: req.user?.userId ?? actorId });
     res.json(buildSuccessResponse(user, 'Usuario creado correctamente'));
   } catch (error) {
