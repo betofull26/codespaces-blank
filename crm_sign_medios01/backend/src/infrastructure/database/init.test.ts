@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import bcrypt from 'bcrypt';
-import { getUserSchemaMigrationSql } from './init.js';
+import { getDataBackfillSql, getUserSchemaMigrationSql } from './init.js';
 
 test('default admin seed uses a bcrypt hash that matches the secret password', async () => {
   const __filename = fileURLToPath(import.meta.url);
@@ -38,4 +38,35 @@ test('user schema migration includes real data migration into auth_users, device
   assert.match(migrationSql, /ON CONFLICT \(user_id\) DO UPDATE/i);
   assert.match(migrationSql, /INSERT INTO devices/i);
   assert.match(migrationSql, /INSERT INTO audit_logs/i);
+});
+
+test('schema migration normalizes contacts and conversations around users', () => {
+  const migrationSql = getUserSchemaMigrationSql();
+
+  assert.match(migrationSql, /ALTER TABLE contacts[^\n]*REFERENCES users\(id\)/i);
+  assert.match(migrationSql, /ALTER TABLE conversations[^\n]*REFERENCES users\(id\)/i);
+});
+
+test('schema migration backfills contacts and message fields from existing records', () => {
+  const migrationSql = getDataBackfillSql();
+
+  assert.match(migrationSql, /INSERT INTO contacts/i);
+  assert.match(migrationSql, /FROM conversations/i);
+  assert.match(migrationSql, /UPDATE messages/i);
+  assert.match(migrationSql, /INSERT INTO user_sessions/i);
+});
+
+test('data backfill registers verification rows for migrated records', () => {
+  const migrationSql = getDataBackfillSql();
+
+  assert.match(migrationSql, /INSERT INTO migration_verifications/i);
+  assert.match(migrationSql, /table_name/i);
+  assert.match(migrationSql, /status/i);
+});
+
+test('user schema migration keeps agents aligned to users through the compatibility layer', () => {
+  const migrationSql = getUserSchemaMigrationSql();
+
+  assert.match(migrationSql, /INSERT INTO agents/i);
+  assert.match(migrationSql, /user_id = EXCLUDED.user_id/i);
 });

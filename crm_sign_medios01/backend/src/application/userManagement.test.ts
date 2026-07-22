@@ -85,11 +85,13 @@ test('createUser writes an audit record for new user creation', async () => {
   assert.equal(auditEntry?.performedBy, 'admin');
 });
 
-test('loginUser accepts legacy plain-text passwords for stored users', async () => {
+test('loginUser authenticates through auth_users and migrates plain-text passwords', async () => {
+  let updatedUser: UserModel | null = null;
+  let updatedAuthUser: { passwordHash: string } | null = null;
+
   const repository: UserRepository = {
     listUsers: async () => [],
-    getUserById: async () => null,
-    getUserByUsername: async () => ({
+    getUserById: async () => ({
       id: 'user-legacy',
       fullName: 'Usuario Legacy',
       username: 'legacyuser',
@@ -100,8 +102,12 @@ test('loginUser accepts legacy plain-text passwords for stored users', async () 
       createdAt: '2026-07-03T00:00:00.000Z',
       updatedAt: '2026-07-03T00:00:00.000Z',
     } as UserModel),
+    getUserByUsername: async () => null,
     createUser: async (user) => user,
-    updateUser: async (user) => user,
+    updateUser: async (user) => {
+      updatedUser = user;
+      return user;
+    },
     deleteUser: async () => undefined,
     updateUserRole: async (_id, _role, _actorId) => null,
     updateUserStatus: async (_id, _status) => null,
@@ -109,12 +115,29 @@ test('loginUser accepts legacy plain-text passwords for stored users', async () 
     createSession: async () => undefined,
     getSessionByTokenHash: async () => null,
     revokeSession: async () => undefined,
+    getAuthUserByUsername: async (username) => ({
+      id: 'auth-user-legacy',
+      userId: 'user-legacy',
+      username,
+      passwordHash: 'plain-password',
+      role: 'admin',
+      status: 'active',
+      accessToPanel: true,
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    }),
+    upsertAuthUser: async (authUser) => {
+      updatedAuthUser = authUser;
+      return authUser;
+    },
   };
 
   const authenticated = await loginUser(repository, 'legacyuser', 'plain-password', 'admin');
 
   assert.equal(authenticated.user.username, 'legacyuser');
   assert.ok(authenticated.sessionToken.length > 0);
+  assert.ok(updatedUser?.passwordHash?.startsWith('$2'));
+  assert.ok(updatedAuthUser?.passwordHash?.startsWith('$2'));
 });
 
 test('loginUser returns a structured session token after a successful login', async () => {

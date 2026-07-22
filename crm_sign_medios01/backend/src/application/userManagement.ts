@@ -3,7 +3,6 @@ import crypto from 'node:crypto';
 import type { AuthUserModel, DeviceModel, UserModel } from '../domain/models.js';
 import type { UserRepository } from '../domain/repositories.js';
 import { createAuditEntry, createRoleHistoryEntry } from './audit.js';
-import { getDatabaseClient } from '../infrastructure/database/connection.js';
 
 const hashToken = (token: string): string => crypto.createHash('sha256').update(token).digest('hex');
 
@@ -151,19 +150,6 @@ export const createUser = async (
   const created = await repository.createUser(userToCreate);
   await syncAuthIdentityAndDevice(repository, created);
 
-  // If the user is created with role "Agente" or "agent", also create an agent record
-  if (isAgent && created.id) {
-    try {
-      const db = await getDatabaseClient();
-      await db.query(
-        'INSERT INTO agents (id, name, role, online) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
-        [created.id, created.fullName, 'agent', false]
-      );
-    } catch (error) {
-      console.warn('[createUser] Could not persist agent record, continuing without it:', error);
-    }
-  }
-
   const actorUsername = await resolveActorUsername(repository, actorId);
 
   await logAuditEvent(repository, 'user', created.id, 'create_user', actorId, {
@@ -191,26 +177,6 @@ export const changeUserRole = async (
   const updated = await repository.updateUserRole(userId, nextRole, actorId);
   if (!updated) {
     throw new Error('Failed to update role');
-  }
-
-  // If the role is changed to "Agente", create or update the agent record
-  const roleLower = nextRole?.toLowerCase?.();
-  if ((roleLower === 'agente' || roleLower === 'agent') && updated.id) {
-    try {
-      const db = await getDatabaseClient();
-      // Check if agent already exists
-      const existingAgent = await db.query('SELECT id FROM agents WHERE id = $1', [updated.id]);
-      
-      if (!existingAgent || existingAgent.length === 0) {
-        // Create new agent record
-        await db.query(
-          'INSERT INTO agents (id, name, role, online) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
-          [updated.id, updated.fullName, 'agent', false]
-        );
-      }
-    } catch (error) {
-      console.warn('[changeUserRole] Could not persist agent record, continuing without it:', error);
-    }
   }
 
   await syncAuthIdentityAndDevice(repository, updated);
@@ -404,7 +370,7 @@ export const verifySessionToken = async (
 
       return { userId: decodedPayload.sub, role: decodedPayload.role };
     } catch (error) {
-      console.warn('[verifySessionToken] Falling back to signed-token validation because session lookup failed:', error);
+      console.warn('[verifySessionToken] Session lookup failed:', error);
       return { userId: decodedPayload.sub, role: decodedPayload.role };
     }
   } catch {
@@ -422,8 +388,11 @@ export const loginUser = async (
     ? await repository.getAuthUserByUsername(username)
     : null;
 
-  const legacyUser = await repository.getUserByUsername(username);
-  const user = legacyUser ?? (authUser ? await repository.getUserById(authUser.userId) : null) ?? null;
+  const user = authUser && authUser.userId
+    ? await repository.getUserById(authUser.userId)
+    : typeof repository.getUserByUsername === 'function'
+      ? await repository.getUserByUsername(username)
+      : null;
 
   if (!user || user.status !== 'active' || !user.accessToPanel) {
     throw new Error('Unauthorized');

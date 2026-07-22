@@ -1,0 +1,33 @@
+{
+  "name": "crm-sign-medios-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "node --import tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "2.8.5",
+    "dotenv": "16.4.1",
+    "express": "4.21.2",
+    "helmet": "4.1.1",
+    "pg": "8.2.0",
+    "archiver": "5.3.1",
+    "socket.io": "4.8.3",
+    "selfsigned": "1.10.11",
+    "pg-native": "^3.8.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "2.8.2",
+    "@types/express": "5.0.1",
+    "@types/node": "22.10.1",
+    "@types/pg": "8.11.0",
+    "tsx": "4.19.0",
+    "typescript": "5.7.3"
+  }
+}
