@@ -1,6 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import type { AgentModel, ConversationModel, MessageModel, UserModel, AuthUserModel, AuditLogModel, SessionModel, DeviceModel } from '../../domain/models.js';
 import type { AgentRepository, ConversationRepository, MessageRepository, UserRepository, ContactRepository } from '../../domain/repositories.js';
 import { getDatabaseClient } from './connection.js';
+
+const isValidUuid = (value: string | null | undefined): value is string => {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+};
+
+const normalizeUuid = (value: string | null | undefined): string => {
+  return isValidUuid(value) ? value : randomUUID();
+};
 
 export const buildAssignedPhone = (userId: string): string => {
   const normalized = userId.replace(/[^a-z0-9]/gi, '').slice(0, 12);
@@ -125,6 +134,10 @@ export class PostgresUserRepository implements UserRepository {
 
   async createUser(user: UserModel): Promise<UserModel> {
     const db = await getDatabaseClient();
+    const userId = normalizeUuid(user.id);
+    const authUserId = normalizeUuid(`auth-${userId}`);
+    const deviceId = normalizeUuid(`device-${userId}`);
+
     // Check if username already exists - only for non-agent roles with non-empty username
     if (user.username && user.username.trim() && user.role !== 'agent') {
       const existingUserResult = await db.query(
@@ -137,10 +150,9 @@ export class PostgresUserRepository implements UserRepository {
     }
     await db.query(
       'INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-      [user.id, user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
+      [userId, user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
     );
 
-    const authUserId = `auth-${user.id}`;
     await db.query(
       `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -152,32 +164,17 @@ export class PostgresUserRepository implements UserRepository {
          status = EXCLUDED.status,
          access_to_panel = EXCLUDED.access_to_panel,
          updated_at = EXCLUDED.updated_at`,
-      [authUserId, user.id, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
+      [authUserId, userId, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
     );
 
     const roleLower = user.role?.toLowerCase?.() ?? '';
     if (roleLower === 'agent' || roleLower === 'supervisor') {
-      const deviceId = `device-${user.id}`;
       const assignedPhone = buildAssignedPhone(user.id);
       await db.query(
         `INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (id) DO NOTHING`,
         [deviceId, user.id, 'Migrated from legacy system', `serial-${user.id}`, null, assignedPhone],
-      );
-
-      await db.query(
-        `INSERT INTO agents (id, user_id, name, role, phone, avatar, initials, online)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (id) DO UPDATE SET
-           user_id = EXCLUDED.user_id,
-           name = EXCLUDED.name,
-           role = EXCLUDED.role,
-           phone = COALESCE(EXCLUDED.phone, agents.phone),
-           avatar = COALESCE(EXCLUDED.avatar, agents.avatar),
-           initials = COALESCE(EXCLUDED.initials, agents.initials),
-           online = EXCLUDED.online`,
-        [user.id, user.id, user.fullName, user.role, null, null, null, false],
       );
     }
 
@@ -186,15 +183,17 @@ export class PostgresUserRepository implements UserRepository {
 
   async updateUser(user: UserModel): Promise<UserModel> {
     const db = await getDatabaseClient();
+    const userId = normalizeUuid(user.id);
+    const authUserId = normalizeUuid(`auth-${userId}`);
+    const deviceId = normalizeUuid(`device-${userId}`);
     const result = await db.query(
       'UPDATE users SET full_name = $1, username = $2, password_hash = $3, role = $4, status = $5, access_to_panel = $6, updated_at = $7 WHERE id = $8 RETURNING id',
-      [user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.updatedAt, user.id],
+      [user.fullName, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.updatedAt, userId],
     );
     if (!Array.isArray(result) || result.length === 0) {
       throw new Error('User not found');
     }
 
-    const authUserId = `auth-${user.id}`;
     await db.query(
       `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -205,36 +204,30 @@ export class PostgresUserRepository implements UserRepository {
          status = EXCLUDED.status,
          access_to_panel = EXCLUDED.access_to_panel,
          updated_at = EXCLUDED.updated_at`,
-      [authUserId, user.id, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
+      [authUserId, userId, user.username, user.passwordHash, user.role, user.status, user.accessToPanel, user.createdAt, user.updatedAt],
     );
 
     const roleLower = user.role?.toLowerCase?.() ?? '';
     if (roleLower === 'agent' || roleLower === 'supervisor') {
       await db.query(
-        `INSERT INTO agents (id, user_id, name, role, phone, avatar, initials, online)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (id) DO UPDATE SET
-           user_id = EXCLUDED.user_id,
-           name = EXCLUDED.name,
-           role = EXCLUDED.role,
-           phone = COALESCE(EXCLUDED.phone, agents.phone),
-           avatar = COALESCE(EXCLUDED.avatar, agents.avatar),
-           initials = COALESCE(EXCLUDED.initials, agents.initials),
-           online = EXCLUDED.online`,
-        [user.id, user.id, user.fullName, user.role, null, null, null, false],
+        `INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO NOTHING`,
+        [deviceId, userId, 'Migrated from legacy system', `serial-${userId}`, null, buildAssignedPhone(userId)],
       );
     }
 
-    return user;
+    return { ...user, id: userId };
   }
 
   async updateUserRole(id: string, role: UserModel['role'], _actorId: string): Promise<UserModel | null> {
     const db = await getDatabaseClient();
+    const userId = normalizeUuid(id);
     const accessToPanel = role !== 'agent';
     const updatedAt = new Date().toISOString();
-    const rows = await db.query('UPDATE users SET role = $1, access_to_panel = $2, updated_at = $3 WHERE id = $4 RETURNING id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [role, accessToPanel, updatedAt, id]);
+    const rows = await db.query('UPDATE users SET role = $1, access_to_panel = $2, updated_at = $3 WHERE id = $4 RETURNING id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [role, accessToPanel, updatedAt, userId]);
 
-    const authUserId = `auth-${id}`;
+    const authUserId = normalizeUuid(`auth-${userId}`);
     await db.query(
       `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -242,19 +235,16 @@ export class PostgresUserRepository implements UserRepository {
          role = EXCLUDED.role,
          access_to_panel = EXCLUDED.access_to_panel,
          updated_at = EXCLUDED.updated_at`,
-      [authUserId, id, null, null, role, 'active', accessToPanel, new Date().toISOString(), updatedAt],
+      [authUserId, userId, null, null, role, 'active', accessToPanel, new Date().toISOString(), updatedAt],
     );
 
     const roleLower = role?.toLowerCase?.() ?? '';
     if (roleLower === 'agent' || roleLower === 'supervisor') {
       await db.query(
-        `INSERT INTO agents (id, user_id, name, role, phone, avatar, initials, online)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (id) DO UPDATE SET
-           user_id = EXCLUDED.user_id,
-           role = EXCLUDED.role,
-           online = EXCLUDED.online`,
-        [id, id, id, role, null, null, null, false],
+        `INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO NOTHING`,
+        [normalizeUuid(`device-${userId}`), userId, 'Migrated from legacy system', `serial-${userId}`, null, buildAssignedPhone(userId)],
       );
     }
 
@@ -263,17 +253,18 @@ export class PostgresUserRepository implements UserRepository {
 
   async updateUserStatus(id: string, status: UserModel['status']): Promise<UserModel | null> {
     const db = await getDatabaseClient();
+    const userId = normalizeUuid(id);
     const updatedAt = new Date().toISOString();
-    const rows = await db.query('UPDATE users SET status = $1, updated_at = $2 WHERE id = $3 RETURNING id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [status, updatedAt, id]);
+    const rows = await db.query('UPDATE users SET status = $1, updated_at = $2 WHERE id = $3 RETURNING id, full_name AS "fullName", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt"', [status, updatedAt, userId]);
 
-    const authUserId = `auth-${id}`;
+    const authUserId = normalizeUuid(`auth-${userId}`);
     await db.query(
       `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status,
          updated_at = EXCLUDED.updated_at`,
-      [authUserId, id, null, null, 'agent', status, false, new Date().toISOString(), updatedAt],
+      [authUserId, userId, null, null, 'agent', status, false, new Date().toISOString(), updatedAt],
     );
 
     return (rows[0] as UserModel | undefined) ?? null;
@@ -281,7 +272,11 @@ export class PostgresUserRepository implements UserRepository {
 
   async deleteUser(id: string): Promise<void> {
     const db = await getDatabaseClient();
-    await db.query('DELETE FROM users WHERE id = $1', [id]);
+    const updatedAt = new Date().toISOString();
+    await db.query(
+      'UPDATE users SET status = $1, updated_at = $2 WHERE id = $3',
+      ['inactive', updatedAt, id],
+    );
   }
 
   async getAuthUserByUsername(username: string): Promise<AuthUserModel | null> {
@@ -292,6 +287,8 @@ export class PostgresUserRepository implements UserRepository {
 
   async upsertAuthUser(authUser: AuthUserModel): Promise<AuthUserModel> {
     const db = await getDatabaseClient();
+    const authUserId = normalizeUuid(authUser.id);
+    const userId = normalizeUuid(authUser.userId);
     await db.query(
       `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -303,9 +300,9 @@ export class PostgresUserRepository implements UserRepository {
          status = EXCLUDED.status,
          access_to_panel = EXCLUDED.access_to_panel,
          updated_at = EXCLUDED.updated_at`,
-      [authUser.id, authUser.userId, authUser.username, authUser.passwordHash, authUser.role, authUser.status, authUser.accessToPanel, authUser.createdAt, authUser.updatedAt],
+      [authUserId, userId, authUser.username, authUser.passwordHash, authUser.role, authUser.status, authUser.accessToPanel, authUser.createdAt, authUser.updatedAt],
     );
-    return authUser;
+    return { ...authUser, id: authUserId, userId };
   }
 
   async createAuditLog(entry: AuditLogModel): Promise<void> {

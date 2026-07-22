@@ -31,16 +31,6 @@ BEGIN
     SELECT 1
     FROM information_schema.table_constraints
     WHERE table_schema = 'public'
-      AND table_name = 'agents'
-      AND constraint_name = 'fk_agents_user'
-  ) THEN
-    ALTER TABLE agents DROP CONSTRAINT IF EXISTS fk_agents_user;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM information_schema.table_constraints
-    WHERE table_schema = 'public'
       AND table_name = 'user_sessions'
       AND constraint_name = 'fk_user_sessions_auth_user'
   ) THEN

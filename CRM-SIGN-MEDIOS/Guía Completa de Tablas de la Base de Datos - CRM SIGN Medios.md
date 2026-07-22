@@ -35,8 +35,22 @@ Representa la ficha de la persona dentro del CRM: nombre, cargo, estado laboral 
     * foto (TEXT): Ruta local o URL de la imagen de perfil del usuario.
     * initials (TEXT): Iniciales de visualización en la UI (ej. "LM").
     * online (BOOLEAN, NOT NULL DEFAULT FALSE): Indica si el usuario está conectado en tiempo real en la plataforma.
-    * created_at (DATETIME, NOT NULL): Fecha y hora de creación de la ficha.
-    * updated_at (DATETIME): Fecha y hora de la última actualización.
+    * created_at (TIMESTAMP WITH TIME ZONE, NOT NULL): Fecha y hora de creación de la ficha.
+    * updated_at (TIMESTAMP WITH TIME ZONE): Fecha y hora de la última actualización.
+
+```sql
+CREATE TABLE users (
+  id UUID PRIMARY KEY,
+  full_name TEXT NOT NULL,
+  position TEXT,
+  entry_date DATE,
+  foto TEXT,
+  initials TEXT,
+  online BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE
+);
+```
 
 ---
 

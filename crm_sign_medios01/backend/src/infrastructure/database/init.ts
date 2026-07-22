@@ -23,7 +23,17 @@ BEGIN
       AND table_name = 'contacts'
       AND column_name = 'agent_id'
   ) THEN
-    ALTER TABLE contacts ALTER COLUMN agent_id DROP NOT NULL;
+    ALTER TABLE contacts RENAME COLUMN agent_id TO user_id;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'conversations'
+      AND column_name = 'agent_id'
+  ) THEN
+    ALTER TABLE conversations RENAME COLUMN agent_id TO user_id;
   END IF;
 
   IF NOT EXISTS (
@@ -74,16 +84,6 @@ BEGIN
       AND column_name = 'online'
   ) THEN
     ALTER TABLE users ADD COLUMN online BOOLEAN NOT NULL DEFAULT FALSE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'agents'
-      AND column_name = 'user_id'
-  ) THEN
-    ALTER TABLE agents ADD COLUMN user_id TEXT;
   END IF;
 
   IF NOT EXISTS (
@@ -166,21 +166,6 @@ BEGIN
     ALTER TABLE user_sessions ADD COLUMN auth_user_id TEXT;
   END IF;
 
-  INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at)
-  SELECT a.id,
-         COALESCE(NULLIF(a.name, ''), a.id),
-         concat('legacy-', a.id),
-         '',
-         'agent',
-         'active',
-         FALSE,
-         NOW()::TEXT,
-         NOW()::TEXT
-  FROM agents a
-  LEFT JOIN users u ON u.id = a.id
-  WHERE u.id IS NULL
-  ON CONFLICT (id) DO NOTHING;
-
   IF EXISTS (
     SELECT 1
     FROM information_schema.table_constraints
@@ -192,14 +177,25 @@ BEGIN
     ALTER TABLE contacts DROP CONSTRAINT fk_contacts_agent;
   END IF;
 
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints
+    WHERE table_schema = 'public'
+      AND table_name = 'contacts'
+      AND constraint_type = 'FOREIGN KEY'
+      AND constraint_name = 'fk_contacts_agent_user'
+  ) THEN
+    ALTER TABLE contacts DROP CONSTRAINT fk_contacts_agent_user;
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1
     FROM information_schema.table_constraints
     WHERE table_schema = 'public'
       AND table_name = 'contacts'
-      AND constraint_name = 'fk_contacts_agent_user'
+      AND constraint_name = 'fk_contacts_user'
   ) THEN
-    ALTER TABLE contacts ADD CONSTRAINT fk_contacts_agent_user FOREIGN KEY (agent_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE;
+    ALTER TABLE contacts ADD CONSTRAINT fk_contacts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
 
   IF EXISTS (
@@ -213,14 +209,25 @@ BEGIN
     ALTER TABLE conversations DROP CONSTRAINT fk_conversations_agent;
   END IF;
 
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints
+    WHERE table_schema = 'public'
+      AND table_name = 'conversations'
+      AND constraint_type = 'FOREIGN KEY'
+      AND constraint_name = 'fk_conversations_agent_user'
+  ) THEN
+    ALTER TABLE conversations DROP CONSTRAINT fk_conversations_agent_user;
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1
     FROM information_schema.table_constraints
     WHERE table_schema = 'public'
       AND table_name = 'conversations'
-      AND constraint_name = 'fk_conversations_agent_user'
+      AND constraint_name = 'fk_conversations_user'
   ) THEN
-    ALTER TABLE conversations ADD CONSTRAINT fk_conversations_agent_user FOREIGN KEY (agent_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE;
+    ALTER TABLE conversations ADD CONSTRAINT fk_conversations_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
 
   IF NOT EXISTS (
@@ -231,16 +238,6 @@ BEGIN
       AND constraint_name = 'fk_conversations_contact'
   ) THEN
     ALTER TABLE conversations ADD CONSTRAINT fk_conversations_contact FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL ON UPDATE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM information_schema.table_constraints
-    WHERE table_schema = 'public'
-      AND table_name = 'agents'
-      AND constraint_name = 'fk_agents_user'
-  ) THEN
-    ALTER TABLE agents ADD CONSTRAINT fk_agents_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
 
   IF NOT EXISTS (
@@ -265,24 +262,24 @@ BEGIN
 END $$;
 
 CREATE TABLE IF NOT EXISTS auth_users (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL UNIQUE,
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL UNIQUE,
   username TEXT UNIQUE,
   password_hash TEXT,
-  role TEXT NOT NULL DEFAULT 'agent',
-  status TEXT NOT NULL DEFAULT 'active',
+  role TEXT NOT NULL DEFAULT 'agent' CHECK (role IN ('admin', 'supervisor', 'agent')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
   access_to_panel BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TEXT NOT NULL,
-  updated_at TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE,
   CONSTRAINT fk_auth_users_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS devices (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL UNIQUE,
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL UNIQUE,
   brand_model TEXT NOT NULL,
-  serial_number_1 TEXT NOT NULL UNIQUE,
-  serial_number_2 TEXT,
+  serial_number_1 VARCHAR(20) NOT NULL UNIQUE,
+  serial_number_2 VARCHAR(20),
   assigned_phone TEXT NOT NULL UNIQUE,
   CONSTRAINT fk_devices_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -362,7 +359,7 @@ ON CONFLICT (id) DO NOTHING;
 `;
 
 export const getDataBackfillSql = () => `
-INSERT INTO contacts (id, agent_id, name, phone, company, position, created_at)
+INSERT INTO contacts (id, user_id, name, phone, company, position, created_at)
 SELECT
   concat('contact-', c.id),
   u.id,
@@ -372,7 +369,7 @@ SELECT
   NULL,
   COALESCE(c.start_time, NOW()::TEXT)
 FROM conversations c
-LEFT JOIN users u ON u.id = c.agent_id
+LEFT JOIN users u ON u.id = c.user_id
 LEFT JOIN contacts existing_contact ON existing_contact.id = concat('contact-', c.id)
 WHERE c.id IS NOT NULL
   AND existing_contact.id IS NULL
