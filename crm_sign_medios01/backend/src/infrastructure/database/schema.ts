@@ -13,6 +13,7 @@ export const getRequiredSchema = (): RequiredTableSchema[] => [
   { name: 'devices', columns: ['id', 'user_id', 'brand_model', 'serial_number_1', 'serial_number_2', 'assigned_phone'] },
   { name: 'conversations', columns: ['id', 'user_id', 'contact_id', 'topic', 'start_time'] },
   { name: 'messages', columns: ['id', 'conversation_id', 'content_type', 'text_body', 'media_file_id', 'channel', 'created_at'] },
+  { name: 'media_files', columns: ['id', 'message_id', 'file_name', 'mime_type', 'file_type', 'file_path', 'file_size', 'created_at'] },
   { name: 'contacts', columns: ['id', 'user_id', 'name', 'phone', 'company', 'position', 'created_at'] },
   { name: 'user_sessions', columns: ['id', 'auth_user_id', 'token_hash', 'expires_at', 'created_at', 'updated_at', 'revoked_at'] },
   { name: 'audit_logs', columns: ['id', 'entity_type', 'entity_id', 'action', 'user_id', 'details', 'created_at'] },

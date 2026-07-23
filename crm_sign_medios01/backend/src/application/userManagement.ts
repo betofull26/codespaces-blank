@@ -96,14 +96,24 @@ const syncAuthIdentityAndDevice = async (repository: UserRepository, user: UserM
   }
 
   if (typeof repository.upsertDevice === 'function') {
+    const existingDevice = typeof repository.getDeviceByUserId === 'function'
+      ? await repository.getDeviceByUserId(user.id)
+      : null;
+
+    const deviceId = existingDevice?.id ?? `device-${user.id}`;
+    const assignedPhone = existingDevice?.assignedPhone ?? buildAssignedPhone(user.id);
+    const serialNumber1 = existingDevice?.serialNumber1 ?? buildDeviceSerial(user.id);
+    const serialNumber2 = existingDevice?.serialNumber2 ?? null;
+
     const device: DeviceModel = {
-      id: crypto.randomUUID(),
+      id: deviceId,
       userId: user.id,
       brandModel: 'Migrated from legacy system',
-      serialNumber1: buildDeviceSerial(user.id),
-      serialNumber2: null,
-      assignedPhone: buildAssignedPhone(user.id),
+      serialNumber1,
+      serialNumber2,
+      assignedPhone,
     };
+
     await repository.upsertDevice(device);
   }
 };

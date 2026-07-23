@@ -19,6 +19,11 @@ export interface MessageRepository {
   create(message: MessageModel): Promise<MessageModel>;
 }
 
+export interface MediaFileRepository {
+  listByMessageId(messageId: string): Promise<MediaFileModel[]>;
+  create(mediaFile: MediaFileModel): Promise<MediaFileModel>;
+}
+
 export interface UserRepository {
   listUsers(): Promise<UserModel[]>;
   getUserById(id: string): Promise<UserModel | null>;
@@ -29,6 +34,7 @@ export interface UserRepository {
   updateUserStatus(id: string, status: AuthUserModel['status']): Promise<UserModel | null>;
   deleteUser(id: string): Promise<void>;
   createAuditLog(entry: AuditLogModel): Promise<void>;
+  listAuditLogs(): Promise<AuditLogModel[]>;
   createSession(session: SessionModel): Promise<void>;
   getSessionByTokenHash(tokenHash: string): Promise<SessionModel | null>;
   revokeSession(tokenHash: string): Promise<void>;

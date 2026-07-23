@@ -88,6 +88,17 @@ export interface AuditLogModel {
   createdAt: string;
 }
 
+export interface MediaFileModel {
+  id: string;
+  messageId: string;
+  fileName: string;
+  mimeType: string;
+  fileType: 'sticker' | 'emoji' | 'image' | 'video' | 'audio' | 'document';
+  filePath: string;
+  fileSize?: number | null;
+  createdAt: string;
+}
+
 export interface SessionModel {
   id: string;
   authUserId: string;

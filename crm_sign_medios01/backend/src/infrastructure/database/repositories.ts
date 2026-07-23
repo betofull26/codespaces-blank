@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { AgentModel, ConversationModel, MessageModel, UserModel, AuthUserModel, AuditLogModel, SessionModel, DeviceModel } from '../../domain/models.js';
-import type { AgentRepository, ConversationRepository, MessageRepository, UserRepository, ContactRepository } from '../../domain/repositories.js';
+import type { AgentModel, ConversationModel, MessageModel, UserModel, AuthUserModel, AuditLogModel, SessionModel, DeviceModel, MediaFileModel } from '../../domain/models.js';
+import type { AgentRepository, ConversationRepository, MessageRepository, UserRepository, ContactRepository, MediaFileRepository } from '../../domain/repositories.js';
 import { getDatabaseClient } from './connection.js';
 
 const isValidUuid = (value: string | null | undefined): value is string => {
@@ -63,35 +63,106 @@ export class PostgresAgentRepository implements AgentRepository {
 }
 
 export class PostgresConversationRepository implements ConversationRepository {
+  private async getOrCreateContactId(agentId: string, clientName: string, phone?: string | null): Promise<string | null> {
+    if (!phone) {
+      return null;
+    }
+
+    const db = await getDatabaseClient();
+    const existing = await db.query('SELECT id FROM contacts WHERE phone = $1 LIMIT 1', [phone]);
+    if (existing.length > 0) {
+      return existing[0].id as string;
+    }
+
+    const contactId = `contact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await db.query(
+      'INSERT INTO contacts (id, user_id, name, phone, company, position, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [contactId, agentId, clientName ?? 'Cliente', phone, null, null, new Date().toISOString()],
+    );
+
+    return contactId;
+  }
+
   async list(): Promise<ConversationModel[]> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, agent_id AS "agentId", client_name AS "clientName", topic, status, start_time AS "startTime" FROM conversations ORDER BY start_time DESC');
+    const rows = await db.query(
+      `SELECT c.id,
+              c.user_id AS "agentId",
+              COALESCE(ct.name, 'Cliente') AS "clientName",
+              c.topic,
+              'active' AS status,
+              c.start_time AS "startTime",
+              ct.phone
+       FROM conversations c
+       LEFT JOIN contacts ct ON ct.id = c.contact_id
+       ORDER BY c.start_time DESC`,
+    );
     return rows as ConversationModel[];
   }
 
   async getById(id: string): Promise<ConversationModel | null> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, agent_id AS "agentId", client_name AS "clientName", topic, status, start_time AS "startTime", phone FROM conversations WHERE id = $1', [id]);
+    const rows = await db.query(
+      `SELECT c.id,
+              c.user_id AS "agentId",
+              COALESCE(ct.name, 'Cliente') AS "clientName",
+              c.topic,
+              'active' AS status,
+              c.start_time AS "startTime",
+              ct.phone
+       FROM conversations c
+       LEFT JOIN contacts ct ON ct.id = c.contact_id
+       WHERE c.id = $1`,
+      [id],
+    );
     return (rows[0] as ConversationModel | undefined) ?? null;
   }
 
   async getByAgentId(agentId: string): Promise<ConversationModel[]> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, agent_id AS "agentId", client_name AS "clientName", topic, status, start_time AS "startTime", phone FROM conversations WHERE agent_id = $1 ORDER BY start_time DESC', [agentId]);
+    const rows = await db.query(
+      `SELECT c.id,
+              c.user_id AS "agentId",
+              COALESCE(ct.name, 'Cliente') AS "clientName",
+              c.topic,
+              'active' AS status,
+              c.start_time AS "startTime",
+              ct.phone
+       FROM conversations c
+       LEFT JOIN contacts ct ON ct.id = c.contact_id
+       WHERE c.user_id = $1
+       ORDER BY c.start_time DESC`,
+      [agentId],
+    );
     return rows as ConversationModel[];
   }
 
   async getByClientPhone(phone: string): Promise<ConversationModel | null> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, agent_id AS "agentId", client_name AS "clientName", topic, status, start_time AS "startTime", phone FROM conversations WHERE phone = $1 ORDER BY start_time DESC LIMIT 1', [phone]);
+    const rows = await db.query(
+      `SELECT c.id,
+              c.user_id AS "agentId",
+              COALESCE(ct.name, 'Cliente') AS "clientName",
+              c.topic,
+              'active' AS status,
+              c.start_time AS "startTime",
+              ct.phone
+       FROM conversations c
+       LEFT JOIN contacts ct ON ct.id = c.contact_id
+       WHERE ct.phone = $1
+       ORDER BY c.start_time DESC
+       LIMIT 1`,
+      [phone],
+    );
     return (rows[0] as ConversationModel | undefined) ?? null;
   }
 
   async create(conversation: ConversationModel): Promise<ConversationModel> {
     const db = await getDatabaseClient();
+    const contactId = await this.getOrCreateContactId(conversation.agentId, conversation.clientName, conversation.phone ?? null);
     await db.query(
-      'INSERT INTO conversations (id, agent_id, client_name, topic, status, start_time, phone) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [conversation.id, conversation.agentId, conversation.clientName, conversation.topic, conversation.status, conversation.startTime, conversation.phone ?? null],
+      'INSERT INTO conversations (id, user_id, contact_id, topic, start_time) VALUES ($1, $2, $3, $4, $5)',
+      [conversation.id, conversation.agentId, contactId, conversation.topic, conversation.startTime],
     );
     return conversation;
   }
@@ -100,17 +171,59 @@ export class PostgresConversationRepository implements ConversationRepository {
 export class PostgresMessageRepository implements MessageRepository {
   async listByConversationId(conversationId: string): Promise<MessageModel[]> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, conversation_id AS "conversationId", sender, text, time, source, external_message_id AS "externalMessageId" FROM messages WHERE conversation_id = $1 ORDER BY time', [conversationId]);
+    const rows = await db.query(
+      `SELECT id,
+              conversation_id AS "conversationId",
+              CASE
+                WHEN COALESCE(channel, source) = 'whatsapp' THEN 'client'
+                ELSE 'agent'
+              END AS sender,
+              COALESCE(text_body, text) AS text,
+              COALESCE(created_at, time) AS time,
+              COALESCE(channel, source, 'dashboard') AS source,
+              external_message_id AS "externalMessageId"
+       FROM messages
+       WHERE conversation_id = $1
+       ORDER BY COALESCE(created_at, time)`,
+      [conversationId],
+    );
     return rows as MessageModel[];
   }
 
   async create(message: MessageModel): Promise<MessageModel> {
     const db = await getDatabaseClient();
+    const contentType = 'text';
+    const textBody = message.text;
+    const channel = message.source ?? 'dashboard';
+    const createdAt = message.time || new Date().toISOString();
+
     await db.query(
-      'INSERT INTO messages (id, conversation_id, sender, text, time, source, external_message_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [message.id, message.conversationId, message.sender, message.text, message.time, message.source ?? 'dashboard', message.externalMessageId ?? null],
+      `INSERT INTO messages (id, conversation_id, content_type, text_body, media_file_id, channel, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [message.id, message.conversationId, contentType, textBody, null, channel, createdAt],
     );
     return message;
+  }
+}
+
+export class PostgresMediaFileRepository implements MediaFileRepository {
+  async listByMessageId(messageId: string): Promise<MediaFileModel[]> {
+    const db = await getDatabaseClient();
+    const rows = await db.query(
+      'SELECT id, message_id AS "messageId", file_name AS "fileName", mime_type AS "mimeType", file_type AS "fileType", file_path AS "filePath", file_size AS "fileSize", created_at AS "createdAt" FROM media_files WHERE message_id = $1 ORDER BY created_at ASC',
+      [messageId],
+    );
+    return rows as MediaFileModel[];
+  }
+
+  async create(mediaFile: MediaFileModel): Promise<MediaFileModel> {
+    const db = await getDatabaseClient();
+    await db.query(
+      `INSERT INTO media_files (id, message_id, file_name, mime_type, file_type, file_path, file_size, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [mediaFile.id, mediaFile.messageId, mediaFile.fileName, mediaFile.mimeType, mediaFile.fileType, mediaFile.filePath, mediaFile.fileSize ?? null, mediaFile.createdAt],
+    );
+    return mediaFile;
   }
 }
 
@@ -255,6 +368,14 @@ export class PostgresUserRepository implements UserRepository {
     );
   }
 
+  async listAuditLogs(): Promise<AuditLogModel[]> {
+    const db = await getDatabaseClient();
+    const rows = await db.query(
+      'SELECT id, entity_type AS "entityType", entity_id AS "entityId", action, user_id AS "userId", details, created_at AS "createdAt" FROM audit_logs ORDER BY created_at DESC LIMIT 100',
+    );
+    return rows as AuditLogModel[];
+  }
+
   async createSession(session: SessionModel): Promise<void> {
     const db = await getDatabaseClient();
     await db.query(
@@ -314,13 +435,13 @@ export class PostgresUserRepository implements UserRepository {
 export class PostgresContactRepository implements ContactRepository {
   async listByAgent(agentId: string): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[]> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, name, phone, company, position, created_at AS "createdAt" FROM contacts WHERE agent_id = $1 ORDER BY created_at DESC', [agentId]);
+    const rows = await db.query('SELECT id, name, phone, company, position, created_at AS "createdAt" FROM contacts WHERE user_id = $1 ORDER BY created_at DESC', [agentId]);
     return rows as { id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[];
   }
 
   async listAllContacts(): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; agentId: string | null }[]> {
     const db = await getDatabaseClient();
-    const rows = await db.query('SELECT id, agent_id AS "agentId", name, phone, company, position, created_at AS "createdAt" FROM contacts ORDER BY created_at DESC');
+    const rows = await db.query('SELECT id, user_id AS "agentId", name, phone, company, position, created_at AS "createdAt" FROM contacts ORDER BY created_at DESC');
     return rows as { id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; agentId: string | null }[];
   }
 
@@ -328,14 +449,14 @@ export class PostgresContactRepository implements ContactRepository {
     const db = await getDatabaseClient();
     const id = `contact-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
     const createdAt = new Date().toISOString();
-    await db.query('INSERT INTO contacts (id, agent_id, name, phone, company, position, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)', [id, agentId, name, phone, company, position, createdAt]);
+    await db.query('INSERT INTO contacts (id, user_id, name, phone, company, position, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)', [id, agentId, name, phone, company, position, createdAt]);
     return { id, agentId, name, phone, company, position, createdAt };
   }
 
   async update(contactId: string, name: string, phone: string, company: string | null, position: string | null): Promise<{ id: string; agentId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }> {
     const db = await getDatabaseClient();
     const rows = await db.query(
-      'UPDATE contacts SET name = $1, phone = $2, company = $3, position = $4 WHERE id = $5 RETURNING id, agent_id AS "agentId", name, phone, company, position, created_at AS "createdAt"',
+      'UPDATE contacts SET name = $1, phone = $2, company = $3, position = $4 WHERE id = $5 RETURNING id, user_id AS "agentId", name, phone, company, position, created_at AS "createdAt"',
       [name, phone, company, position, contactId],
     );
     return (rows[0] as { id: string; agentId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string } | undefined) ?? { id: contactId, agentId: null, name, phone, company, position, createdAt: new Date().toISOString() };

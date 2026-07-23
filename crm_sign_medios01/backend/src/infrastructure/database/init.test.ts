@@ -69,7 +69,18 @@ test('contacts and conversations use user_id relationships with users', async ()
   assert.match(sql, /CONSTRAINT fk_contacts_user[\s\S]*?FOREIGN KEY \(user_id\) REFERENCES users\(id\)/i);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS conversations[\s\S]*?user_id UUID NOT NULL/i);
   assert.match(sql, /CONSTRAINT fk_conversations_user[\s\S]*?FOREIGN KEY \(user_id\) REFERENCES users\(id\)/i);
-  assert.match(sql, /INSERT INTO conversations \(id, user_id, client_name, topic, status, start_time\)/i);
+  assert.match(sql, /INSERT INTO conversations \(id, user_id, contact_id, topic, start_time\)/i);
+});
+
+test('initialization script creates the backups table for persistence metadata', async () => {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const sql = await fs.readFile(path.resolve(__dirname, 'init.sql'), 'utf8');
+
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS backups/i);
+  assert.match(sql, /backup_type TEXT NOT NULL/i);
+  assert.match(sql, /file_name TEXT NOT NULL/i);
+  assert.match(sql, /status TEXT NOT NULL DEFAULT 'pending' CHECK \(status IN \('pending', 'success', 'failed'\)\)/i);
 });
 
 test('messages table includes the created_at column required by the new schema validation', async () => {

@@ -24,6 +24,7 @@ test('validateRequiredSchema accepts the full new schema shape', () => {
     devices: ['id', 'user_id', 'brand_model', 'serial_number_1', 'serial_number_2', 'assigned_phone'],
     conversations: ['id', 'user_id', 'contact_id', 'topic', 'start_time'],
     messages: ['id', 'conversation_id', 'content_type', 'text_body', 'media_file_id', 'channel', 'created_at'],
+    media_files: ['id', 'message_id', 'file_name', 'mime_type', 'file_type', 'file_path', 'file_size', 'created_at'],
     contacts: ['id', 'user_id', 'name', 'phone', 'company', 'position', 'created_at'],
     user_sessions: ['id', 'auth_user_id', 'token_hash', 'expires_at', 'created_at', 'updated_at', 'revoked_at'],
     audit_logs: ['id', 'entity_type', 'entity_id', 'action', 'user_id', 'details', 'created_at'],
