@@ -1,15 +1,24 @@
 import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
-import type { AuthUserModel, DeviceModel, UserModel } from '../domain/models.js';
+import type { AuthUserModel, DeviceModel, UserModel, UserProfileModel } from '../domain/models.js';
 import type { UserRepository } from '../domain/repositories.js';
 import { createAuditEntry, createRoleHistoryEntry } from './audit.js';
 
 const hashToken = (token: string): string => crypto.createHash('sha256').update(token).digest('hex');
 
+const isValidUuid = (value: string | null | undefined): value is string => {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+};
+
 const buildAssignedPhone = (userId: string): string => {
   const normalized = userId.replace(/[^a-z0-9]/gi, '').slice(0, 12);
   const suffix = `${Date.now().toString().slice(-6)}${Math.random().toString().slice(2, 6)}`;
   return `+${normalized || 'user'}${suffix}`;
+};
+
+const buildDeviceSerial = (userId: string): string => {
+  const normalized = userId.replace(/[^a-z0-9]/gi, '').slice(0, 12);
+  return `serial-${normalized || 'device'}`.slice(0, 20);
 };
 
 export const validateLoginPayload = (payload: unknown): { username: string; password: string } => {
@@ -69,12 +78,16 @@ const resolveActorUsername = async (repository: UserRepository, actorId: string)
     return actorId || 'system';
   }
 
-  const actor = await repository.getUserById(actorId);
-  return actor?.username || actorId;
-};
+  const actorProfile = await repository.getUserById(actorId);
+  if (actorProfile?.fullName) {
+    return actorProfile.fullName;
+  }
 
-const resolveUserLabel = (user: Pick<UserModel, 'username' | 'fullName' | 'role'>): string => {
-  return user.role === 'agent' ? user.fullName : user.username;
+  const authUser = typeof repository.getAuthUserByUserId === 'function'
+    ? await repository.getAuthUserByUserId(actorId)
+    : null;
+
+  return authUser?.username || actorId;
 };
 
 const syncAuthIdentityAndDevice = async (repository: UserRepository, user: UserModel, authUser: AuthUserModel): Promise<void> => {
@@ -84,10 +97,10 @@ const syncAuthIdentityAndDevice = async (repository: UserRepository, user: UserM
 
   if (typeof repository.upsertDevice === 'function') {
     const device: DeviceModel = {
-      id: `device-${user.id}`,
+      id: crypto.randomUUID(),
       userId: user.id,
       brandModel: 'Migrated from legacy system',
-      serialNumber1: `serial-${user.id}`,
+      serialNumber1: buildDeviceSerial(user.id),
       serialNumber2: null,
       assignedPhone: buildAssignedPhone(user.id),
     };
@@ -117,12 +130,12 @@ export const logAuditEvent = async (
 
 export const createUser = async (
   repository: UserRepository,
-  userProfile: UserModel,
+  userProfile: UserProfileModel,
   authData: { username: string; passwordHash: string; role: 'admin' | 'agent' | 'supervisor'; accessToPanel?: boolean },
   actorId: string,
 ): Promise<UserModel> => {
   const now = new Date().toISOString();
-  const userId = userProfile.id || `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const userId = isValidUuid(userProfile.id) ? userProfile.id : crypto.randomUUID();
 
   const passwordHash = await hashPasswordIfNeeded(authData.passwordHash);
 
@@ -179,15 +192,19 @@ export const changeUserRole = async (
     throw new Error('Failed to update role');
   }
 
+  const currentAuthUser = typeof repository.getAuthUserByUserId === 'function'
+    ? await repository.getAuthUserByUserId(userId)
+    : null;
+
   const authUser: AuthUserModel = {
-    id: `auth-${userId}`,
-    userId: userId,
-    username: '',
-    passwordHash: '',
+    id: currentAuthUser?.id ?? `auth-${userId}`,
+    userId,
+    username: currentAuthUser?.username ?? '',
+    passwordHash: currentAuthUser?.passwordHash ?? '',
     role: nextRole,
-    status: 'active',
+    status: currentAuthUser?.status ?? 'active',
     accessToPanel: nextRole !== 'agent',
-    createdAt: new Date().toISOString(),
+    createdAt: currentAuthUser?.createdAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
   await syncAuthIdentityAndDevice(repository, updated, authUser);
@@ -205,7 +222,7 @@ export const changeUserRole = async (
 
 export const updateUser = async (
   repository: UserRepository,
-  userProfile: UserModel,
+  userProfile: UserProfileModel,
   actorId: string,
 ): Promise<UserModel> => {
   const current = await repository.getUserById(userProfile.id);
@@ -254,15 +271,19 @@ export const changeUserStatus = async (
     throw new Error('Failed to update status');
   }
 
+  const currentAuthUser = typeof repository.getAuthUserByUserId === 'function'
+    ? await repository.getAuthUserByUserId(userId)
+    : null;
+
   const authUser: AuthUserModel = {
-    id: `auth-${userId}`,
-    userId: userId,
-    username: '',
-    passwordHash: '',
-    role: 'agent',
+    id: currentAuthUser?.id ?? `auth-${userId}`,
+    userId,
+    username: currentAuthUser?.username ?? '',
+    passwordHash: currentAuthUser?.passwordHash ?? '',
+    role: currentAuthUser?.role ?? 'agent',
     status: nextStatus,
-    accessToPanel: false,
-    createdAt: new Date().toISOString(),
+    accessToPanel: currentAuthUser?.accessToPanel ?? false,
+    createdAt: currentAuthUser?.createdAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
   await syncAuthIdentityAndDevice(repository, updated, authUser);

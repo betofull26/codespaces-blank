@@ -55,7 +55,7 @@ export interface UserProfileModel {
   updatedAt?: string | null;
 }
 
-export interface UserModel extends UserProfileModel {}
+export type UserModel = UserProfileModel;
 
 export interface AuthUserModel {
   id: string;
@@ -145,9 +145,5 @@ export const validateCustomer = (customer: CustomerModel) => {
 export const validateUser = (user: UserModel) => {
   assertRequired(user.id, 'id');
   assertRequired(user.fullName, 'fullName');
-  assertRequired(user.username, 'username');
-  assertRequired(user.passwordHash, 'passwordHash');
-  assertRequired(user.role, 'role');
-  assertRequired(user.status, 'status');
-  assertRequired(user.accessToPanel, 'accessToPanel');
+  assertRequired(user.createdAt, 'createdAt');
 };

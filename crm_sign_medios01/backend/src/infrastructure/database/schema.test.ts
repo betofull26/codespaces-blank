@@ -19,14 +19,14 @@ test('validateRequiredSchema reports missing tables and columns', () => {
 test('validateRequiredSchema accepts the full new schema shape', () => {
   const requiredSchema = getRequiredSchema();
   const issues = validateRequiredSchema(requiredSchema, {
-    users: ['id', 'full_name', 'username', 'password_hash', 'role', 'status', 'access_to_panel', 'created_at', 'updated_at'],
+    users: ['id', 'full_name', 'position', 'entry_date', 'foto', 'initials', 'online', 'created_at', 'updated_at'],
     auth_users: ['id', 'user_id', 'username', 'password_hash', 'role', 'status', 'access_to_panel', 'created_at', 'updated_at'],
     devices: ['id', 'user_id', 'brand_model', 'serial_number_1', 'serial_number_2', 'assigned_phone'],
-    conversations: ['id', 'agent_id', 'contact_id', 'topic', 'start_time'],
+    conversations: ['id', 'user_id', 'contact_id', 'topic', 'start_time'],
     messages: ['id', 'conversation_id', 'content_type', 'text_body', 'media_file_id', 'channel', 'created_at'],
-    contacts: ['id', 'agent_id', 'name', 'phone', 'company', 'position', 'created_at'],
+    contacts: ['id', 'user_id', 'name', 'phone', 'company', 'position', 'created_at'],
     user_sessions: ['id', 'auth_user_id', 'token_hash', 'expires_at', 'created_at', 'updated_at', 'revoked_at'],
-    audit_logs: ['id', 'entity_type', 'entity_id', 'action', 'performed_by', 'user_id', 'details', 'created_at'],
+    audit_logs: ['id', 'entity_type', 'entity_id', 'action', 'user_id', 'details', 'created_at'],
     backups: ['id', 'backup_type', 'file_name', 'created_at', 'status', 'file_path', 'file_url'],
   });
 

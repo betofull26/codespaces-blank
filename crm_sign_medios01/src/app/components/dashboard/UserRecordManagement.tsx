@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Camera, Search } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { UserRecordForm } from "./UserRecordForm";
-import { createUser, deleteUserById, fetchUsers, updateUser, updateUserStatus, type BackendUser } from "../../services/dashboardApi";
+import { createUser, deleteUserById, fetchUsers, updateUser, updateUserStatus, type AuthUserPayload, type BackendRole, type BackendStatus, type UserProfileDto } from "../../services/dashboardApi";
 import { updateDeviceForUser } from "../../services/dashboardApi";
 import { getCurrentUser, getCurrentUserRole } from "../../lib/auth";
 
@@ -52,7 +52,7 @@ export function UserRecordManagement() {
     }
   };
 
-  const mapBackendRoleToRecordRole = (role: BackendUser["role"]): UserRole => {
+  const mapBackendRoleToRecordRole = (role?: BackendRole): UserRole => {
     switch (role) {
       case "admin":
         return "Administrador";
@@ -63,7 +63,7 @@ export function UserRecordManagement() {
     }
   };
 
-  const mapRecordRoleToBackendRole = (role: UserRole): BackendUser["role"] => {
+  const mapRecordRoleToBackendRole = (role: UserRole): BackendRole => {
     switch (role) {
       case "Administrador":
         return "admin";
@@ -74,22 +74,22 @@ export function UserRecordManagement() {
     }
   };
 
-  const mapBackendUserToRecord = (user: BackendUser, fallback?: UserRecord): UserRecord => ({
+  const mapBackendUserToRecord = (user: UserProfileDto, fallback?: UserRecord): UserRecord => ({
     id: user.id,
     name: user.fullName,
-    position: fallback?.position ?? "",
+    position: fallback?.position ?? user.position ?? "",
     assignedPhone: fallback?.assignedPhone ?? "",
     deviceModel: fallback?.deviceModel ?? "",
     serialNumber: fallback?.serialNumber ?? "",
     serialNumber2: fallback?.serialNumber2 ?? "",
-    photo: fallback?.photo ?? "",
-    entryDate: fallback?.entryDate ?? user.createdAt,
-    username: user.username,
+    photo: fallback?.photo ?? user.foto ?? "",
+    entryDate: fallback?.entryDate ?? user.entryDate ?? user.createdAt,
+    username: fallback?.username ?? "",
     password: fallback?.password ?? "",
-    role: mapBackendRoleToRecordRole(user.role),
+    role: fallback?.role ?? "Agente",
   });
 
-  const mergeRecordsWithBackendUsers = (storedRecords: UserRecord[], backendUsers: BackendUser[]) => {
+  const mergeRecordsWithBackendUsers = (storedRecords: UserRecord[], backendUsers: UserProfileDto[]) => {
     // Map to store extra info from localStorage (position, phone, device, etc.)
     const byId = new Map(storedRecords.map((record) => [record.id, record]));
 
@@ -103,12 +103,28 @@ export function UserRecordManagement() {
     return mergedRecords;
   };
 
-  const buildPayload = (record: Omit<UserRecord, "id">) => ({
+  const buildProfilePayload = (record: Omit<UserRecord, "id">): UserProfileDto => ({
+    id: "",
     fullName: record.name,
+    position: record.position,
+    entryDate: record.entryDate,
+    foto: record.photo ?? null,
+    initials: record.name
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("")
+      .slice(0, 3) || "U",
+    online: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  const buildAuthPayload = (record: Omit<UserRecord, "id">): AuthUserPayload => ({
     username: record.username,
     passwordHash: record.password,
     role: mapRecordRoleToBackendRole(record.role),
-    status: "active" as const,
+    status: "active",
     accessToPanel: record.role !== "Agente",
   });
 
@@ -142,7 +158,8 @@ export function UserRecordManagement() {
     setIsSaving(true);
     setStatusMessage(null);
     const role = currentRole;
-    const payload = buildPayload(record);
+    const profilePayload = buildProfilePayload(record);
+    const authPayload = buildAuthPayload(record);
 
     // Check for duplicate username in current records
     if (record.username && record.role !== "Agente") {
@@ -157,7 +174,7 @@ export function UserRecordManagement() {
     }
 
     try {
-      const created = await createUser(payload, role, currentUser?.id ?? "system");
+      const created = await createUser(profilePayload, authPayload, role, currentUser?.id ?? "system");
       await updateDeviceForUser(created.id, {
         brandModel: record.deviceModel,
         serialNumber1: record.serialNumber,
@@ -211,10 +228,11 @@ export function UserRecordManagement() {
     setIsSaving(true);
     setStatusMessage(null);
     const role = currentRole;
-    const payload = buildPayload(record);
+    const profilePayload = buildProfilePayload(record);
+    const authPayload = buildAuthPayload(record);
 
     try {
-      await updateUser(editingRecord.id, payload, role, currentUser?.id ?? "system");
+      await updateUser(editingRecord.id, profilePayload, authPayload, role, currentUser?.id ?? "system");
       await updateDeviceForUser(editingRecord.id, {
         brandModel: record.deviceModel,
         serialNumber1: record.serialNumber,

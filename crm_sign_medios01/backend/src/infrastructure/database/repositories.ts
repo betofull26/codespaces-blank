@@ -21,10 +21,11 @@ export class PostgresAgentRepository implements AgentRepository {
   async list(): Promise<AgentModel[]> {
     const db = await getDatabaseClient();
     const rows = await db.query(
-      `SELECT u.id, u.full_name AS name, u.role, d.assigned_phone AS phone, u.foto AS avatar, u.initials, u.online
+      `SELECT u.id, u.full_name AS name, COALESCE(a.role, 'agent') AS role, d.assigned_phone AS phone, u.foto AS avatar, u.initials, u.online
        FROM users u
+       LEFT JOIN auth_users a ON a.user_id = u.id
        LEFT JOIN devices d ON d.user_id = u.id
-       WHERE u.role IN ('agent', 'supervisor', 'admin')
+       WHERE COALESCE(a.role, 'agent') IN ('agent', 'supervisor', 'admin')
        ORDER BY u.full_name`,
     );
     return rows as AgentModel[];
@@ -33,8 +34,9 @@ export class PostgresAgentRepository implements AgentRepository {
   async getById(id: string): Promise<AgentModel | null> {
     const db = await getDatabaseClient();
     const rows = await db.query(
-      `SELECT u.id, u.full_name AS name, u.role, d.assigned_phone AS phone, u.foto AS avatar, u.initials, u.online
+      `SELECT u.id, u.full_name AS name, COALESCE(a.role, 'agent') AS role, d.assigned_phone AS phone, u.foto AS avatar, u.initials, u.online
        FROM users u
+       LEFT JOIN auth_users a ON a.user_id = u.id
        LEFT JOIN devices d ON d.user_id = u.id
        WHERE u.id = $1`,
       [id],
@@ -46,16 +48,15 @@ export class PostgresAgentRepository implements AgentRepository {
     const db = await getDatabaseClient();
     const now = new Date().toISOString();
     await db.query(
-      `INSERT INTO users (id, full_name, username, password_hash, role, status, access_to_panel, created_at, updated_at, initials, online, foto)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO users (id, full_name, created_at, updated_at, initials, online, foto)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (id) DO UPDATE SET
          full_name = EXCLUDED.full_name,
-         role = EXCLUDED.role,
          updated_at = EXCLUDED.updated_at,
          initials = EXCLUDED.initials,
          online = EXCLUDED.online,
          foto = EXCLUDED.foto`,
-      [agent.id, agent.name, agent.id, '', agent.role, 'active', false, now, now, agent.initials ?? null, agent.online, agent.avatar ?? null],
+      [agent.id, agent.name, now, now, agent.initials ?? null, agent.online, agent.avatar ?? null],
     );
     return agent;
   }
@@ -170,16 +171,15 @@ export class PostgresUserRepository implements UserRepository {
     const userId = normalizeUuid(id);
     const accessToPanel = role !== 'agent';
     const updatedAt = new Date().toISOString();
-    
-    const authUserId = normalizeUuid(`auth-${userId}`);
+
     await db.query(
       `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT (id) DO UPDATE SET
+       VALUES (gen_random_uuid(), $1, NULL, NULL, $2, 'active', $3, $4, $5)
+       ON CONFLICT (user_id) DO UPDATE SET
          role = EXCLUDED.role,
          access_to_panel = EXCLUDED.access_to_panel,
          updated_at = EXCLUDED.updated_at`,
-      [authUserId, userId, null, null, role, 'active', accessToPanel, new Date().toISOString(), updatedAt]
+      [userId, role, accessToPanel, new Date().toISOString(), updatedAt]
     );
 
     return this.getUserById(userId);
@@ -189,15 +189,14 @@ export class PostgresUserRepository implements UserRepository {
     const db = await getDatabaseClient();
     const userId = normalizeUuid(id);
     const updatedAt = new Date().toISOString();
-    
-    const authUserId = normalizeUuid(`auth-${userId}`);
+
     await db.query(
       `INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT (id) DO UPDATE SET
+       VALUES (gen_random_uuid(), $1, NULL, NULL, 'agent', $2, FALSE, $3, $4)
+       ON CONFLICT (user_id) DO UPDATE SET
          status = EXCLUDED.status,
          updated_at = EXCLUDED.updated_at`,
-      [authUserId, userId, null, null, 'agent', status, false, new Date().toISOString(), updatedAt]
+      [userId, status, new Date().toISOString(), updatedAt]
     );
 
     return this.getUserById(userId);
@@ -206,17 +205,25 @@ export class PostgresUserRepository implements UserRepository {
   async deleteUser(id: string): Promise<void> {
     const db = await getDatabaseClient();
     const updatedAt = new Date().toISOString();
-    
-    const authUserId = normalizeUuid(`auth-${id}`);
+
     await db.query(
-      `UPDATE auth_users SET status = $1, updated_at = $2 WHERE id = $3`,
-      ['inactive', updatedAt, authUserId]
+      `UPDATE auth_users SET status = $1, updated_at = $2 WHERE user_id = $3`,
+      ['inactive', updatedAt, normalizeUuid(id)]
     );
   }
 
   async getAuthUserByUsername(username: string): Promise<AuthUserModel | null> {
     const db = await getDatabaseClient();
     const rows = await db.query('SELECT id, user_id AS "userId", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM auth_users WHERE LOWER(username) = LOWER($1) LIMIT 1', [username]);
+    return (rows[0] as AuthUserModel | undefined) ?? null;
+  }
+
+  async getAuthUserByUserId(userId: string): Promise<AuthUserModel | null> {
+    const db = await getDatabaseClient();
+    const rows = await db.query(
+      'SELECT id, user_id AS "userId", username, password_hash AS "passwordHash", role, status, access_to_panel AS "accessToPanel", created_at AS "createdAt", updated_at AS "updatedAt" FROM auth_users WHERE user_id = $1 LIMIT 1',
+      [normalizeUuid(userId)],
+    );
     return (rows[0] as AuthUserModel | undefined) ?? null;
   }
 
@@ -287,8 +294,9 @@ export class PostgresUserRepository implements UserRepository {
 
   async upsertDevice(device: DeviceModel): Promise<DeviceModel> {
     const db = await getDatabaseClient();
-    const id = device.id || `device-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = normalizeUuid(device.id);
     const assignedPhone = device.assignedPhone ?? buildAssignedPhone(device.userId);
+    const serialNumber1 = (device.serialNumber1 ?? `serial-${device.userId}`).slice(0, 20);
     await db.query(
       `INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -297,9 +305,9 @@ export class PostgresUserRepository implements UserRepository {
          serial_number_1 = EXCLUDED.serial_number_1,
          serial_number_2 = EXCLUDED.serial_number_2,
          assigned_phone = EXCLUDED.assigned_phone`,
-      [id, device.userId, device.brandModel ?? 'Migrated from legacy system', device.serialNumber1 ?? `serial-${device.userId}`, device.serialNumber2 ?? null, assignedPhone],
+      [id, device.userId, device.brandModel ?? 'Migrated from legacy system', serialNumber1, device.serialNumber2 ?? null, assignedPhone],
     );
-    return { ...device, id, assignedPhone };
+    return { ...device, id, assignedPhone, serialNumber1 };
   }
 }
 

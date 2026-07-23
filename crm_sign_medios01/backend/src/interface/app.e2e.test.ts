@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AddressInfo } from 'node:net';
-import type { UserModel } from '../domain/models.js';
+import type { AuditLogModel, UserModel } from '../domain/models.js';
 import type { UserRepository } from '../domain/repositories.js';
 import { createApp } from './app.js';
 import { setUserRepositoryFactory, resetUserRepositoryFactory } from '../infrastructure/http/repositoryFactory.js';
@@ -14,7 +14,7 @@ class InMemoryUserRepository implements UserRepository {
   private authUsers = new Map<string, any>();
   private devices = new Map<string, any>();
   private sessions = new Map<string, any>();
-  private auditLogs: Array<{ id: string; entityType: string; entityId: string; action: string; performedBy: string; details: string; createdAt: string }> = [];
+  private auditLogs: AuditLogModel[] = [];
 
   async listUsers(): Promise<UserModel[]> {
     return [...this.users.values()];
@@ -58,7 +58,7 @@ class InMemoryUserRepository implements UserRepository {
     this.users.delete(id);
   }
 
-  async createAuditLog(entry: { id: string; entityType: string; entityId: string; action: string; performedBy: string; details: string; createdAt: string }): Promise<void> {
+  async createAuditLog(entry: AuditLogModel): Promise<void> {
     this.auditLogs.push(entry);
   }
 
@@ -110,6 +110,7 @@ class InMemoryUserRepository implements UserRepository {
       role: 'admin' as const,
       status: 'active' as const,
       accessToPanel: true,
+      online: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

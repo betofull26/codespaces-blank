@@ -25,14 +25,15 @@ export interface UserRepository {
   getUserByUsername(username: string): Promise<UserModel | null>;
   createUser(user: UserModel): Promise<UserModel>;
   updateUser(user: UserModel): Promise<UserModel>;
-  updateUserRole(id: string, role: UserModel['role'], actorId: string): Promise<UserModel | null>;
-  updateUserStatus(id: string, status: UserModel['status']): Promise<UserModel | null>;
+  updateUserRole(id: string, role: AuthUserModel['role'], actorId: string): Promise<UserModel | null>;
+  updateUserStatus(id: string, status: AuthUserModel['status']): Promise<UserModel | null>;
   deleteUser(id: string): Promise<void>;
   createAuditLog(entry: AuditLogModel): Promise<void>;
   createSession(session: SessionModel): Promise<void>;
   getSessionByTokenHash(tokenHash: string): Promise<SessionModel | null>;
   revokeSession(tokenHash: string): Promise<void>;
   getAuthUserByUsername?(username: string): Promise<AuthUserModel | null>;
+  getAuthUserByUserId?(userId: string): Promise<AuthUserModel | null>;
   upsertAuthUser?(authUser: AuthUserModel): Promise<AuthUserModel>;
   listDevices(): Promise<DeviceModel[]>;
   getDeviceByUserId(userId: string): Promise<DeviceModel | null>;
@@ -41,7 +42,7 @@ export interface UserRepository {
 
 export interface AuthenticatedUser {
   userId: string;
-  role: UserModel['role'];
+  role: AuthUserModel['role'];
 }
 
 export interface ContactRepository {

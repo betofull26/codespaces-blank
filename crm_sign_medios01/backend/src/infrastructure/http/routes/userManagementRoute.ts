@@ -56,19 +56,27 @@ userManagementRouter.post('/users', async (req: AuthenticatedRequest, res: Respo
     ensureAuthorized(role, 'manage-users');
     const repository = getUserRepository();
     const actorId = typeof req.body?.actorId === 'string' ? req.body.actorId : 'system';
-    
-    // Map request fields to internal model with defaults
-    const userPayload = {
-      ...req.body,
+
+    const userProfile = {
+      id: typeof req.body?.id === 'string' ? req.body.id : undefined,
       fullName: req.body.name || req.body.fullName || '',
-      username: req.body.username || req.body.email?.split('@')[0] || `user-${Date.now()}`,
-      passwordHash: req.body.password || req.body.passwordHash || '',
-      status: req.body.status || 'active',
+      position: typeof req.body?.position === 'string' ? req.body.position : null,
+      entryDate: typeof req.body?.entryDate === 'string' ? req.body.entryDate : null,
+      foto: typeof req.body?.foto === 'string' ? req.body.foto : null,
+      initials: typeof req.body?.initials === 'string' ? req.body.initials : null,
+      online: typeof req.body?.online === 'boolean' ? req.body.online : false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const authData = {
+      username: typeof req.body?.username === 'string' ? req.body.username : `user-${Date.now()}`,
+      passwordHash: typeof req.body?.password === 'string' ? req.body.password : typeof req.body?.passwordHash === 'string' ? req.body.passwordHash : '',
       role: req.body.role || 'agent',
       accessToPanel: req.body.accessToPanel !== false,
     };
-    
-    const user = await createUser(repository, userPayload, actorId);
+
+    const user = await createUser(repository, userProfile, authData, actorId);
     await logAuditEvent(repository, 'user', user.id, 'create_user_route', actorId, { source: 'real-route', requestedBy: req.user?.userId ?? actorId });
     res.json(buildSuccessResponse(user, 'Usuario creado correctamente'));
   } catch (error) {
@@ -178,6 +186,9 @@ userManagementRouter.put('/devices/:userId', async (req: AuthenticatedRequest, r
     const actorId = typeof req.body?.actorId === 'string' ? req.body.actorId : 'system';
     const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
     const payload = (req.body ?? {}) as Partial<DeviceModel>;
+    if (typeof repository.upsertDevice !== 'function') {
+      return res.status(500).json(buildErrorResponse('No se pudo actualizar el dispositivo', 'DEVICE_UPSERT_NOT_SUPPORTED'));
+    }
     const device = await repository.upsertDevice({
       id: `device-${userId}`,
       userId,

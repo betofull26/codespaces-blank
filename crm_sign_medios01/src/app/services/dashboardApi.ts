@@ -1,5 +1,5 @@
-import type { Agent, Conversation, ChatMessage } from "../components/dashboard/types";
-import { requestJson } from "./apiClient";
+import type { Agent, Conversation, ChatMessage } from "../components/dashboard/types.js";
+import { requestJson } from "./apiClient.js";
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -8,26 +8,30 @@ interface ApiEnvelope<T> {
   error?: string;
 }
 
-export interface BackendUser {
+export type BackendRole = "admin" | "supervisor" | "agent";
+export type BackendStatus = "active" | "inactive" | "suspended";
+
+export interface UserProfileDto {
   id: string;
   fullName: string;
-  username: string;
-  passwordHash: string;
-  role: "admin" | "supervisor" | "agent";
-  status: "active" | "inactive" | "suspended";
-  accessToPanel: boolean;
+  position?: string | null;
+  entryDate?: string | null;
+  foto?: string | null;
+  initials?: string | null;
+  online?: boolean;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string | null;
 }
 
-export interface UserCreatePayload {
-  fullName: string;
+export interface AuthUserPayload {
   username: string;
   passwordHash: string;
-  role: BackendUser["role"];
-  status: BackendUser["status"];
+  role: BackendRole;
+  status: BackendStatus;
   accessToPanel: boolean;
-  actorId?: string;
+}
+
+export interface UserProfileReadDto extends UserProfileDto {
 }
 
 async function requestApiData<T>(path: string, init?: RequestInit): Promise<T> {
@@ -199,21 +203,21 @@ export async function exchangeWhatsAppSignupCode(code: string): Promise<{ succes
   });
 }
 
-export async function fetchUsers(role: string): Promise<BackendUser[]> {
-  return requestApiData<BackendUser[]>("/users", {
+export async function fetchUsers(role: string): Promise<UserProfileReadDto[]> {
+  return requestApiData<UserProfileReadDto[]>("/users", {
     headers: {
       "x-user-role": role,
     },
   });
 }
 
-export async function createUser(payload: UserCreatePayload, role: string, actorId?: string): Promise<BackendUser> {
-  return requestApiData<BackendUser>("/users", {
+export async function createUser(profilePayload: UserProfileDto, authPayload: AuthUserPayload, role: string, actorId?: string): Promise<UserProfileReadDto> {
+  return requestApiData<UserProfileReadDto>("/users", {
     method: "POST",
     headers: {
       "x-user-role": role,
     },
-    body: JSON.stringify({ ...payload, actorId }),
+    body: JSON.stringify({ ...profilePayload, ...authPayload, actorId }),
   });
 }
 
@@ -227,18 +231,18 @@ export async function updateDeviceForUser(userId: string, payload: { brandModel?
   });
 }
 
-export async function updateUser(userId: string, payload: UserCreatePayload, role: string, actorId?: string): Promise<BackendUser> {
-  return requestApiData<BackendUser>(`/users/${encodeURIComponent(userId)}`, {
+export async function updateUser(userId: string, profilePayload: UserProfileDto, authPayload: AuthUserPayload, role: string, actorId?: string): Promise<UserProfileReadDto> {
+  return requestApiData<UserProfileReadDto>(`/users/${encodeURIComponent(userId)}`, {
     method: "PUT",
     headers: {
       "x-user-role": role,
     },
-    body: JSON.stringify({ ...payload, actorId }),
+    body: JSON.stringify({ ...profilePayload, ...authPayload, actorId }),
   });
 }
 
-export async function updateUserStatus(userId: string, status: BackendUser["status"], role: string): Promise<BackendUser> {
-  return requestApiData<BackendUser>(`/users/${encodeURIComponent(userId)}/status`, {
+export async function updateUserStatus(userId: string, status: BackendStatus, role: string): Promise<UserProfileReadDto> {
+  return requestApiData<UserProfileReadDto>(`/users/${encodeURIComponent(userId)}/status`, {
     method: "PATCH",
     headers: {
       "x-user-role": role,

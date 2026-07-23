@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   phone VARCHAR(20) NOT NULL,
   company TEXT NULL,
   position TEXT NULL,
-  created_at DATETIME NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
   CONSTRAINT fk_contacts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -145,6 +145,15 @@ CREATE INDEX IF NOT EXISTS idx_auth_users_user_id ON auth_users(user_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
 CREATE INDEX IF NOT EXISTS idx_media_files_message_id ON media_files(message_id);
 
+INSERT INTO users (id, full_name, position, entry_date, foto, initials, online, created_at, updated_at)
+VALUES
+  ('11111111-1111-4111-8111-111111111111', 'Carlos Mendoza', NULL, NULL, '', 'CM', TRUE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z'),
+  ('22222222-2222-4222-8222-222222222222', 'Laura Gómez', NULL, NULL, '', 'LG', FALSE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z'),
+  ('66666666-6666-4666-8666-666666666666', 'Administrador', NULL, NULL, '', 'AD', FALSE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z')
+ON CONFLICT (id) DO UPDATE SET
+  full_name = EXCLUDED.full_name,
+  updated_at = EXCLUDED.updated_at;
+
 INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
 VALUES
   ('33333333-3333-4333-8333-333333333333', '11111111-1111-4111-8111-111111111111', 'agent-1', '', 'agent', 'active', FALSE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z'),
@@ -153,7 +162,7 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
-SELECT concat('device-', id), id, 'Migrated from legacy system', concat('serial-', id), NULL, concat('+000000000', substr(id, 1, 3))
+SELECT gen_random_uuid(), id, 'Migrated from legacy system', concat('serial-', substr(replace(id::text, '-', ''), 1, 12)), NULL, concat('+000000000', substr(replace(id::text, '-', ''), 1, 3))
 FROM users
 ON CONFLICT (id) DO NOTHING;
 
@@ -163,22 +172,22 @@ FROM users
 WHERE id IS NOT NULL
 ON CONFLICT DO NOTHING;
 
-INSERT INTO conversations (id, user_id, client_name, topic, status, start_time)
+INSERT INTO contacts (id, user_id, name, phone, company, position, created_at)
 VALUES
-  ('conv-1', '11111111-1111-4111-8111-111111111111', 'Ana Pérez', 'Solicitud de presupuesto', 'active', '2026-07-02T09:18:00.000Z'),
-  ('conv-2', '22222222-2222-4222-8222-222222222222', 'Miguel Torres', 'Seguimiento de pedido', 'waiting', '2026-07-02T10:00:00.000Z')
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'Ana Pérez', '+521234567890', 'CRM Sign Medios', 'Cliente', '2026-07-02T09:18:00.000Z'),
+  ('bbbbbbbb-0000-4000-8000-000000000002', '22222222-2222-4222-8222-222222222222', 'Miguel Torres', '+529876543210', 'CRM Sign Medios', 'Cliente', '2026-07-02T10:00:00.000Z')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO messages (id, conversation_id, sender, text, time, source, external_message_id)
+INSERT INTO conversations (id, user_id, contact_id, topic, start_time)
 VALUES
-  ('msg-1', 'conv-1', 'client', 'Hola, necesito información sobre el servicio.', '2026-07-02T09:19:00.000Z', 'whatsapp', 'wa-123'),
-  ('msg-2', 'conv-1', 'agent', 'Claro, te comparto los detalles.', '2026-07-02T09:20:00.000Z', 'dashboard', NULL)
+  ('cccccccc-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'aaaaaaaa-0000-4000-8000-000000000001', 'Solicitud de presupuesto', '2026-07-02T09:18:00.000Z'),
+  ('dddddddd-0000-4000-8000-000000000002', '22222222-2222-4222-8222-222222222222', 'bbbbbbbb-0000-4000-8000-000000000002', 'Seguimiento de pedido', '2026-07-02T10:00:00.000Z')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO users (id, full_name, position, entry_date, foto, initials, online, created_at, updated_at)
+INSERT INTO messages (id, conversation_id, content_type, text_body, media_file_id, channel, created_at)
 VALUES
-  ('66666666-6666-4666-8666-666666666666', 'Administrador', NULL, NULL, '', 'AD', FALSE, '2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z')
-ON CONFLICT (id) DO UPDATE SET
-  full_name = EXCLUDED.full_name,
-  updated_at = EXCLUDED.updated_at;
+  ('eeeeeeee-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001', 'text', 'Hola, necesito información sobre el servicio.', NULL, 'whatsapp', '2026-07-02T09:19:00.000Z'),
+  ('ffffffff-0000-4000-8000-000000000002', 'cccccccc-0000-4000-8000-000000000001', 'text', 'Claro, te comparto los detalles.', NULL, 'dashboard', '2026-07-02T09:20:00.000Z')
+ON CONFLICT (id) DO NOTHING;
+
 
