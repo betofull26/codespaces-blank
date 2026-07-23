@@ -43,17 +43,17 @@ backupRouter.get('/backups', requireAdmin, async (_req, res) => {
 backupRouter.post('/backups', requireAdminForMutations, async (req, res) => {
   try {
     const backupType = typeof req.body?.backupType === 'string' ? req.body.backupType : 'chats';
-    const agentId = typeof req.body?.agentId === 'string' ? req.body.agentId : undefined;
+    const userId = typeof req.body?.userId === 'string' ? req.body.userId : undefined;
 
     // Resolve the full name of the session user to use as fallback in CSV
     let actorName: string | undefined;
-    const userId = (req as any).user?.userId;
-    if (userId) {
+    const sessionUserId = (req as any).user?.userId;
+    if (sessionUserId) {
       try {
         const db = await getDatabaseClient();
         const rows = (await db.query(
           `SELECT full_name FROM users WHERE id = $1`,
-          [userId],
+          [sessionUserId],
         )) as Array<{ full_name: string }>;
         actorName = rows[0]?.full_name ?? undefined;
       } catch {
@@ -61,13 +61,13 @@ backupRouter.post('/backups', requireAdminForMutations, async (req, res) => {
       }
     }
 
-    const backup = await createBackup(backupType, agentId, actorName);
+    const backup = await createBackup(backupType, userId, actorName);
     const auditRepo = new PostgresUserRepository();
     const actorId = (req as any).user?.userId ?? 'system';
     await logAuditEvent(auditRepo, 'backup', backup.id, 'create_backup', actorId, {
       backupType,
       fileName: backup.fileName,
-      agentId,
+      userId,
       actorName,
     });
     res.status(201).json(buildSuccessResponse(backup, 'Respaldo creado correctamente'));

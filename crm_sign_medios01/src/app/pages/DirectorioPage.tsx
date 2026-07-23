@@ -10,9 +10,9 @@ export function DirectorioPage() {
   const currentUser = getCurrentUser();
   const isSupervisor = currentUser?.role === "supervisor";
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [contacts, setContacts] = useState<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; agentId: string | null }[]>([]);
+  const [contacts, setContacts] = useState<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; userId: string | null }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [newContactName, setNewContactName] = useState('');
@@ -100,7 +100,7 @@ export function DirectorioPage() {
   const agentMap = new Map<string, Agent>(agents.map((agent) => [agent.id, agent]));
 
   const combinedContacts = contacts.map((contact) => {
-    const agent = agentMap.get(contact.agentId);
+    const agent = agentMap.get(contact.userId ?? '');
     return {
       ...contact,
       agentName: agent?.name ?? 'Directorio',
@@ -111,7 +111,7 @@ export function DirectorioPage() {
   const filteredContacts = combinedContacts.filter((contact) => {
     const q = searchTerm.trim().toLowerCase();
     const matchesSearch = !q || contact.name.toLowerCase().includes(q) || contact.phone.includes(q) || (contact.company ?? '').toLowerCase().includes(q) || (contact.position ?? '').toLowerCase().includes(q);
-    const matchesAgent = !selectedAgentId || contact.agentId === selectedAgentId;
+    const matchesAgent = !selectedUserId || contact.userId === selectedUserId;
     return matchesSearch && matchesAgent;
   });
 
@@ -144,8 +144,8 @@ export function DirectorioPage() {
                 <UserPlus size={16} />
               </button>
               <select
-                value={selectedAgentId}
-                onChange={(e) => setSelectedAgentId(e.target.value)}
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
                 className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
               >
                 <option value="">Todas las cuentas</option>
@@ -229,7 +229,7 @@ export function DirectorioPage() {
                 <p className="text-sm text-slate-400">No hay contactos que coincidan.</p>
               ) : (
                 filteredContacts.map((contact) => (
-                  <div key={`${contact.agentId}-${contact.id}`} className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-center">
+                  <div key={`${contact.userId}-${contact.id}`} className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-center">
                     <div>
                       <p className="font-medium text-slate-800">{contact.name}</p>
                       {(contact.company || contact.position) && (

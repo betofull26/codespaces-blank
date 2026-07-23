@@ -73,8 +73,9 @@ const formatBackupTime = (value: string): string => {
   return `${hours}:${minutes}`;
 };
 
-const formatBackupMessageLine = (message: { sender: string; text: string; time: string }): string => {
-  return `${formatBackupDate(message.time)}, ${formatBackupTime(message.time)} - ${message.sender}: ${message.text}`;
+const formatBackupMessageLine = (message: { sender: string; textBody?: string | null; contentType: string; createdAt: string }): string => {
+  const text = message.textBody ?? `[${message.contentType}]`;
+  return `${formatBackupDate(message.createdAt)}, ${formatBackupTime(message.createdAt)} - ${message.sender}: ${text}`;
 };
 
 const exportTableToCsv = async (tableName: string, query: string): Promise<string> => {
@@ -113,7 +114,7 @@ const writeBackupArchive = async (fileName: string, data: Record<string, string>
   });
 };
 
-export const createBackup = async (backupType: string = 'chats', agentId?: string, actorName?: string): Promise<BackupRecord> => {
+export const createBackup = async (backupType: string = 'chats', userId?: string, actorName?: string): Promise<BackupRecord> => {
   const db = await getDatabaseClient();
   const createdAt = new Date().toISOString();
   const fileName = createBackupFileName(backupType);
@@ -124,13 +125,13 @@ export const createBackup = async (backupType: string = 'chats', agentId?: strin
     // Export chats in hierarchical structure: AgentFolder/ConversationFile.txt
     let agents: Array<{ id: string; name: string }>;
     
-    if (agentId) {
+    if (userId) {
       agents = (await db.query(
         `SELECT u.id, u.full_name AS name
          FROM users u
          WHERE u.id = $1
          ORDER BY name`,
-        [agentId],
+        [userId],
       )) as Array<{ id: string; name: string }>;
     } else {
       agents = (await db.query(
@@ -143,15 +144,19 @@ export const createBackup = async (backupType: string = 'chats', agentId?: strin
 
     for (const agent of agents) {
       const convRows = (await db.query(
-        `SELECT id, agent_id, client_name, topic, start_time FROM conversations WHERE agent_id = $1 ORDER BY start_time`,
+        `SELECT c.id, ct.name AS client_name, ct.phone AS client_phone, c.topic, c.start_time
+         FROM conversations c
+         LEFT JOIN contacts ct ON ct.id = c.contact_id
+         WHERE c.user_id = $1
+         ORDER BY c.start_time`,
         [agent.id],
-      )) as Array<{ id: string; agent_id: string; client_name: string; topic: string; start_time: string }>;
+      )) as Array<{ id: string; client_name: string | null; client_phone: string | null; topic: string; start_time: string }>;
 
       for (const conv of convRows) {
         const messages = (await db.query(
-          'SELECT sender, text, time FROM messages WHERE conversation_id = $1 ORDER BY time',
+          'SELECT sender, text_body AS textBody, content_type AS contentType, created_at AS createdAt FROM messages WHERE conversation_id = $1 ORDER BY created_at',
           [conv.id],
-        )) as Array<{ sender: string; text: string; time: string }>;
+        )) as Array<{ sender: string; textBody: string | null; contentType: string; createdAt: string }>;
 
         const content = `${messages.map((message) => formatBackupMessageLine(message)).join('\n\n')}\n`;
 
@@ -169,7 +174,7 @@ export const createBackup = async (backupType: string = 'chats', agentId?: strin
          c.phone              AS telefono_cliente,
          c.name               AS nombre_cliente
        FROM contacts c
-       LEFT JOIN users u ON u.id = c.agent_id
+       LEFT JOIN users u ON u.id = c.user_id
        ORDER BY c.name`,
       [actorName ?? ''],
     )) as BackupExportEntry[];
@@ -186,7 +191,7 @@ export const createBackup = async (backupType: string = 'chats', agentId?: strin
          c.phone              AS telefono_cliente,
          c.name               AS nombre_cliente
        FROM contacts c
-       LEFT JOIN users u ON u.id = c.agent_id
+       LEFT JOIN users u ON u.id = c.user_id
        ORDER BY c.name`,
       [actorName ?? ''],
     )) as BackupExportEntry[];
@@ -204,15 +209,19 @@ export const createBackup = async (backupType: string = 'chats', agentId?: strin
 
     for (const agent of agents) {
       const convRows = (await db.query(
-        `SELECT id, agent_id, client_name, topic, start_time FROM conversations WHERE agent_id = $1 ORDER BY start_time`,
+        `SELECT c.id, ct.name AS client_name, ct.phone AS client_phone, c.topic, c.start_time
+         FROM conversations c
+         LEFT JOIN contacts ct ON ct.id = c.contact_id
+         WHERE c.user_id = $1
+         ORDER BY c.start_time`,
         [agent.id],
-      )) as Array<{ id: string; agent_id: string; client_name: string; topic: string; start_time: string }>;
+      )) as Array<{ id: string; client_name: string | null; client_phone: string | null; topic: string; start_time: string }>;
 
       for (const conv of convRows) {
         const messages = (await db.query(
-          'SELECT sender, text, time FROM messages WHERE conversation_id = $1 ORDER BY time',
+          'SELECT sender, text_body AS textBody, content_type AS contentType, created_at AS createdAt FROM messages WHERE conversation_id = $1 ORDER BY created_at',
           [conv.id],
-        )) as Array<{ sender: string; text: string; time: string }>;
+        )) as Array<{ sender: string; textBody: string | null; contentType: string; createdAt: string }>;
 
         const content = `${messages.map((message) => formatBackupMessageLine(message)).join('\n\n')}\n`;
 

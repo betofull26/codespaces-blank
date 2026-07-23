@@ -12,8 +12,8 @@ export async function fetchAllContacts() {
 export async function fetchConversations() {
     return requestApiData('/conversations');
 }
-export async function fetchAgentConversations(agentId) {
-    return requestApiData(`/agents/${encodeURIComponent(agentId)}/conversations`);
+export async function fetchUserConversations(userId) {
+    return requestApiData(`/users/${encodeURIComponent(userId)}/conversations`);
 }
 export async function fetchConversationMessages(conversationId) {
     const rows = await requestApiData(`/conversations/${encodeURIComponent(conversationId)}/messages`);
@@ -46,16 +46,16 @@ export async function updateConversationStatus(conversationId, status) {
 export async function fetchBackups() {
     return requestApiData('/backups');
 }
-export async function fetchContactsByAgent(agentId) {
-    return requestApiData(`/agents/${encodeURIComponent(agentId)}/contacts`);
+export async function fetchContactsByUser(userId) {
+    return requestApiData(`/users/${encodeURIComponent(userId)}/contacts`);
 }
 export async function fetchContacts() {
     return requestApiData('/contacts');
 }
-export async function createContact(name, phone, company, position, agentId) {
+export async function createContact(name, phone, company, position, userId) {
     return requestApiData('/contacts', {
         method: 'POST',
-        body: JSON.stringify({ name, phone, company, position, agentId }),
+        body: JSON.stringify({ name, phone, company, position, userId }),
     });
 }
 export async function updateContact(contactId, name, phone, company, position) {
@@ -69,16 +69,16 @@ export async function deleteContact(contactId) {
         method: 'DELETE',
     });
 }
-export async function createContactForAgent(agentId, name, phone, company, position) {
-    return requestApiData(`/agents/${encodeURIComponent(agentId)}/contacts`, {
+export async function createContactForUser(userId, name, phone, company, position) {
+    return requestApiData(`/users/${encodeURIComponent(userId)}/contacts`, {
         method: 'POST',
         body: JSON.stringify({ name, phone, company, position }),
     });
 }
-export async function createBackup(backupType = 'chats', agentId) {
+export async function createBackup(backupType = 'chats', userId) {
     return requestApiData('/backups', {
         method: 'POST',
-        body: JSON.stringify({ backupType, agentId }),
+        body: JSON.stringify({ backupType, userId }),
     });
 }
 export async function fetchAuditLogs() {

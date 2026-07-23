@@ -17,14 +17,14 @@ export const backupExportQueries = {
   },
   conversations: {
     name: 'conversations',
-    sql: `SELECT id, agent_id, client_name, topic, status, start_time FROM conversations ORDER BY start_time`,
+    sql: `SELECT id, user_id, contact_id, topic, status, start_time FROM conversations ORDER BY start_time`,
   },
   messages: {
     name: 'messages',
-    sql: `SELECT id, conversation_id, sender, text, time, source, external_message_id FROM messages ORDER BY time`,
+    sql: `SELECT id, conversation_id, content_type, text_body, media_file_id, channel, created_at, external_message_id FROM messages ORDER BY created_at`,
   },
   contacts: {
     name: 'contacts',
-    sql: `SELECT u.full_name AS nombre_usuario, c.phone AS telefono_cliente, c.name AS nombre_cliente FROM contacts c LEFT JOIN users u ON u.id = c.agent_id ORDER BY c.name`,
+    sql: `SELECT u.full_name AS nombre_usuario, c.phone AS telefono_cliente, c.name AS nombre_cliente FROM contacts c LEFT JOIN users u ON u.id = c.user_id ORDER BY c.name`,
   },
 };

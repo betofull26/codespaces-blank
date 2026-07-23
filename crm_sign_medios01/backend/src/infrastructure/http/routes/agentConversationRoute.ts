@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createMessage, ingestWhatsAppMessage, listAgents, getConversationsByAgentId, listMessagesByConversationId, listConversations } from '../../../application/useCases.js';
+import { createMessage, ingestWhatsAppMessage, listAgents, getConversationsByUserId, listMessagesByConversationId, listConversations } from '../../../application/useCases.js';
 import { buildErrorResponse, buildSuccessResponse } from '../../../common/apiResponse.js';
 import { config } from '../../../common/config.js';
 import { authenticateRequest } from '../middleware/authMiddleware.js';
@@ -51,10 +51,11 @@ agentConversationRouter.get('/conversations', async (_req, res) => {
   }
 });
 
-agentConversationRouter.get('/agents/:id/conversations', async (req, res) => {
+agentConversationRouter.get('/users/:userId/conversations', async (req, res) => {
   try {
     const repository = new PostgresConversationRepository();
-    const conversations = await getConversationsByAgentId(repository, req.params.id);
+    const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+    const conversations = await getConversationsByUserId(repository, userId);
     res.json(buildSuccessResponse(conversations, 'Conversaciones obtenidas correctamente'));
   } catch (error) {
     res.status(500).json(buildErrorResponse('No se pudieron obtener las conversaciones', error instanceof Error ? error.message : 'UNKNOWN_ERROR'));
@@ -269,10 +270,10 @@ agentConversationRouter.post('/whatsapp/send', async (req, res) => {
 
       if (!conv) {
         // create a conversation if none exists
-        const agentId = process.env.DEFAULT_AGENT_ID ?? 'agent-1';
+        const userId = process.env.DEFAULT_USER_ID ?? process.env.DEFAULT_AGENT_ID ?? 'agent-1';
         const newConv = {
           id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          agentId,
+          userId,
           clientName: 'Cliente',
           topic: sendText.length > 0 ? sendText.slice(0, 48) : 'Mensaje saliente',
           status: 'active',

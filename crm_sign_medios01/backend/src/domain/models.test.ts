@@ -9,7 +9,8 @@ test('validateAgent rejects missing required fields', () => {
 test('validateConversation validates required fields', () => {
   const conversation = {
     id: 'conv-1',
-    agentId: 'agent-1',
+    userId: 'user-1',
+    contactId: 'contact-1',
     clientName: 'Ana',
     topic: 'Soporte',
     status: 'active' as const,
@@ -19,6 +20,6 @@ test('validateConversation validates required fields', () => {
   assert.doesNotThrow(() => validateConversation(conversation));
 });
 
-test('validateMessage rejects invalid sender', () => {
-  assert.throws(() => validateMessage({ id: 'msg-1', conversationId: 'conv-1', sender: 'unknown', text: 'Hola', time: '2026-07-02T10:00:00.000Z' } as never), /sender/);
+test('validateMessage rejects invalid channel', () => {
+  assert.throws(() => validateMessage({ id: 'msg-1', conversationId: 'conv-1', contentType: 'text', channel: 'invalid' as any, createdAt: '2026-07-02T10:00:00.000Z' } as never), /channel/);
 });

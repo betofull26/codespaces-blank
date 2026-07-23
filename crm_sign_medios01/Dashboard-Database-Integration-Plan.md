@@ -45,8 +45,8 @@ Implementar una capa de datos real para el dashboard de agentes, reemplazando lo
 - `GET /api/agents`
   - retorna lista de agentes y sus datos generales
 
-- `GET /api/agents/:agentId/conversations`
-  - retorna conversaciones del agente seleccionado y sus mensajes
+- `GET /api/users/:userId/conversations`
+  - retorna conversaciones del usuario seleccionado y sus mensajes
   - los mensajes deben incluir el origen, por ejemplo `source: "whatsapp"`, cuando vienen por la API de WhatsApp
 
 - `GET /api/conversations/:conversationId/messages`
@@ -72,7 +72,7 @@ Implementar una capa de datos real para el dashboard de agentes, reemplazando lo
 
 - en `AgentChatTree`, evita depender de `agent.conversations` estático para todos los mensajes
 - carga conversaciones al seleccionar un agente
-- usa `GET /api/agents/:agentId/conversations`
+- usa `GET /api/users/:userId/conversations`
 - muestra un estado de carga mientras se obtienen datos
 
 ### 4.3. Enviar intervenciones reales
@@ -126,9 +126,9 @@ Implementar una capa de datos real para el dashboard de agentes, reemplazando lo
 
 - ✅ Objetivo 1: servicio API `dashboardApi.ts` creado y `DashboardPage` actualizado para usar `fetchAgents()`.
 - ✅ Manejadores de carga y error añadidos en la UI del dashboard.
-- ✅ Paso 6: `AgentChatTree` ahora carga conversaciones desde `GET /api/agents/:agentId/conversations`.
+- ✅ Paso 6: `AgentChatTree` ahora carga conversaciones desde `GET /api/users/:userId/conversations`.
 - ✅ Paso 7: `InterventionBar` envía intervenciones a `POST /api/conversations/:conversationId/interventions` y muestra errores si fallan.
-- ✅ Paso 8: se agregó un mock de API local en `vite.config.ts` para simular `GET /api/agents`, `GET /api/agents/:agentId/conversations`, `GET /api/conversations/:conversationId/messages`, y `POST /api/conversations/:conversationId/interventions`.
+- ✅ Paso 8: se agregó un mock de API local en `vite.config.ts` para simular `GET /api/agents`, `GET /api/users/:userId/conversations`, `GET /api/conversations/:conversationId/messages`, y `POST /api/conversations/:conversationId/interventions`.
 - ✅ Paso 9: el dashboard compila correctamente y el flujo de datos se puede verificar en desarrollo.
 - ➜ Siguiente paso: conectar con backend real o persistencia si se desea más allá del mock local.
 

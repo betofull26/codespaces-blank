@@ -1,7 +1,7 @@
 import type { ContactRepository } from '../domain/repositories.js';
 
 export interface ContactInput {
-  agentId: string | null;
+  userId: string | null;
   name: string;
   phone: string;
   company?: string | null;
@@ -11,8 +11,8 @@ export interface ContactInput {
 export const createContact = async (
   repository: ContactRepository,
   input: ContactInput,
-): Promise<{ id: string; agentId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }> => {
-  return repository.create(input.agentId, input.name, input.phone, input.company ?? null, input.position ?? null);
+): Promise<{ id: string; userId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }> => {
+  return repository.create(input.userId, input.name, input.phone, input.company ?? null, input.position ?? null);
 };
 
 export const updateContact = async (
@@ -22,19 +22,19 @@ export const updateContact = async (
   phone: string,
   company: string | null,
   position: string | null,
-): Promise<{ id: string; agentId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }> => {
+): Promise<{ id: string; userId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }> => {
   return repository.update(contactId, name, phone, company, position);
 };
 
-export const listContactsByAgent = async (
+export const listContactsByUser = async (
   repository: ContactRepository,
-  agentId: string,
+  userId: string,
 ): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[]> => {
-  return repository.listByAgent(agentId);
+  return repository.listByUser(userId);
 };
 
 export const listAllContacts = async (
   repository: ContactRepository,
-): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; agentId: string | null }[]> => {
+): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; userId: string | null }[]> => {
   return repository.listAllContacts();
 };

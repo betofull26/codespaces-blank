@@ -10,7 +10,8 @@ export interface AgentModel {
 
 export interface ConversationModel {
   id: string;
-  agentId: string;
+  userId: string;
+  contactId: string | null;
   clientName: string;
   topic: string;
   status: 'active' | 'closed' | 'waiting';
@@ -21,10 +22,11 @@ export interface ConversationModel {
 export interface MessageModel {
   id: string;
   conversationId: string;
-  sender: 'agent' | 'client' | 'supervisor' | 'supervisor_as_agent';
-  text: string;
-  time: string;
-  source?: 'whatsapp' | 'dashboard' | 'internal';
+  contentType: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker';
+  textBody?: string | null;
+  mediaFileId?: string | null;
+  channel: 'whatsapp' | 'dashboard' | 'internal';
+  createdAt: string;
   externalMessageId?: string | null;
 }
 
@@ -130,7 +132,10 @@ export const validateAgent = (agent: AgentModel) => {
 
 export const validateConversation = (conversation: ConversationModel) => {
   assertRequired(conversation.id, 'id');
-  assertRequired(conversation.agentId, 'agentId');
+  assertRequired(conversation.userId, 'userId');
+  if (conversation.contactId !== null && conversation.contactId !== undefined) {
+    assertRequired(conversation.contactId, 'contactId');
+  }
   assertRequired(conversation.clientName, 'clientName');
   assertRequired(conversation.topic, 'topic');
   assertRequired(conversation.status, 'status');
@@ -140,12 +145,12 @@ export const validateConversation = (conversation: ConversationModel) => {
 export const validateMessage = (message: MessageModel) => {
   assertRequired(message.id, 'id');
   assertRequired(message.conversationId, 'conversationId');
-  assertRequired(message.sender, 'sender');
-  if (!['agent', 'client', 'supervisor', 'supervisor_as_agent'].includes(message.sender)) {
-    throw new Error('sender is invalid');
+  assertRequired(message.contentType, 'contentType');
+  assertRequired(message.channel, 'channel');
+  if (!['whatsapp', 'dashboard', 'internal'].includes(message.channel)) {
+    throw new Error('channel is invalid');
   }
-  assertRequired(message.text, 'text');
-  assertRequired(message.time, 'time');
+  assertRequired(message.createdAt, 'createdAt');
 };
 
 export const validateCustomer = (customer: CustomerModel) => {

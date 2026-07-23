@@ -6,13 +6,13 @@ import { logAuditEvent } from '../../../application/userManagement.js';
 
 export const contactRouter = Router();
 
-// List contacts for an agent
-contactRouter.get('/agents/:agentId/contacts', async (req, res) => {
+// List contacts for a user
+contactRouter.get('/users/:userId/contacts', async (req, res) => {
   try {
     await authenticateRequest(req as any, res, async () => {
-      const agentId = Array.isArray(req.params.agentId) ? req.params.agentId[0] : req.params.agentId;
+      const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
       const repo = new PostgresContactRepository();
-      const rows = await repo.listByAgent(agentId);
+      const rows = await repo.listByUser(userId);
       res.json(buildSuccessResponse(rows, 'Contacts retrieved'));
     });
   } catch (error) {
@@ -20,8 +20,8 @@ contactRouter.get('/agents/:agentId/contacts', async (req, res) => {
   }
 });
 
-// Create contact for an agent
-contactRouter.post('/agents/:agentId/contacts', async (req, res) => {
+// Create contact for a user
+contactRouter.post('/users/:userId/contacts', async (req, res) => {
   try {
     await authenticateRequest(req as AuthenticatedRequest, res, async () => {
       const role = ((req as AuthenticatedRequest).user?.role as 'admin' | 'supervisor' | 'agent' | undefined) ?? 'agent';
@@ -29,7 +29,7 @@ contactRouter.post('/agents/:agentId/contacts', async (req, res) => {
         return res.status(403).json(buildErrorResponse('No tienes permisos para crear contactos', 'FORBIDDEN'));
       }
 
-      const agentId = Array.isArray(req.params.agentId) ? req.params.agentId[0] : req.params.agentId;
+      const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
       const company = typeof req.body?.company === 'string' ? req.body.company.trim() : '';
@@ -39,11 +39,11 @@ contactRouter.post('/agents/:agentId/contacts', async (req, res) => {
       }
 
       const repo = new PostgresContactRepository();
-      const created = await repo.create(agentId, name, phone, company || null, position || null);
+      const created = await repo.create(userId, name, phone, company || null, position || null);
       const auditRepo = new PostgresUserRepository();
       const actorId = (req as AuthenticatedRequest).user?.userId ?? 'system';
       await logAuditEvent(auditRepo, 'contact', created.id, 'create_contact', actorId, {
-        agentId,
+        userId,
         name,
         phone,
         company: company || null,
@@ -65,8 +65,8 @@ contactRouter.post('/contacts', async (req, res) => {
         return res.status(403).json(buildErrorResponse('No tienes permisos para crear contactos', 'FORBIDDEN'));
       }
 
-      const rawAgentId = typeof req.body?.agentId === 'string' ? req.body.agentId.trim() : '';
-      const agentId = rawAgentId || null;
+      const rawUserId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+      const userId = rawUserId || null;
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
       const company = typeof req.body?.company === 'string' ? req.body.company.trim() : '';
@@ -76,11 +76,11 @@ contactRouter.post('/contacts', async (req, res) => {
       }
 
       const repo = new PostgresContactRepository();
-      const created = await repo.create(agentId, name, phone, company || null, position || null);
+      const created = await repo.create(userId, name, phone, company || null, position || null);
       const auditRepo = new PostgresUserRepository();
       const actorId = (req as AuthenticatedRequest).user?.userId ?? 'system';
       await logAuditEvent(auditRepo, 'contact', created.id, 'create_contact', actorId, {
-        agentId,
+        userId,
         name,
         phone,
         company: company || null,

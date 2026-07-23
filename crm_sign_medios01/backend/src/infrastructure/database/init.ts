@@ -288,31 +288,54 @@ CREATE TABLE IF NOT EXISTS migration_verifications (
   created_at TEXT NOT NULL
 );
 
-INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
-SELECT
-  COALESCE(NULLIF(auth_user.id, ''), concat('auth-', u.id)),
-  u.id,
-  u.username,
-  u.password_hash,
-  COALESCE(NULLIF(u.role, ''), 'agent'),
-  COALESCE(NULLIF(u.status, ''), 'active'),
-  COALESCE(u.access_to_panel, FALSE),
-  COALESCE(u.created_at, NOW()::TEXT),
-  COALESCE(u.updated_at, NOW()::TEXT)
-FROM users u
-LEFT JOIN auth_users auth_user ON auth_user.user_id = u.id
-WHERE u.id IS NOT NULL
-ON CONFLICT (user_id) DO UPDATE SET
-  username = EXCLUDED.username,
-  password_hash = EXCLUDED.password_hash,
-  role = EXCLUDED.role,
-  status = EXCLUDED.status,
-  access_to_panel = EXCLUDED.access_to_panel,
-  updated_at = EXCLUDED.updated_at;
+IF EXISTS (
+  SELECT 1
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'users'
+    AND column_name = 'username'
+) THEN
+  INSERT INTO auth_users (id, user_id, username, password_hash, role, status, access_to_panel, created_at, updated_at)
+  SELECT
+    COALESCE(auth_user.id, gen_random_uuid()),
+    u.id,
+    u.username,
+    u.password_hash,
+    COALESCE(NULLIF(u.role, ''), 'agent'),
+    COALESCE(NULLIF(u.status, ''), 'active'),
+    COALESCE(u.access_to_panel, FALSE),
+    COALESCE(u.created_at, NOW()::TEXT),
+    COALESCE(u.updated_at, NOW()::TEXT)
+  FROM users u
+  LEFT JOIN auth_users auth_user ON auth_user.user_id = u.id
+  WHERE u.id IS NOT NULL
+  ON CONFLICT (user_id) DO UPDATE SET
+    username = EXCLUDED.username,
+    password_hash = EXCLUDED.password_hash,
+    role = EXCLUDED.role,
+    status = EXCLUDED.status,
+    access_to_panel = EXCLUDED.access_to_panel,
+    updated_at = EXCLUDED.updated_at;
+
+  INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, user_id, details, created_at)
+  SELECT
+    gen_random_uuid(),
+    'user',
+    u.id,
+    'migrate_user',
+    COALESCE(u.username, 'system'),
+    u.id,
+    json_build_object('source', 'migration', 'message', 'Migrated from legacy users table')::text,
+    COALESCE(u.created_at, NOW()::TEXT)
+  FROM users u
+  LEFT JOIN audit_logs existing_log ON existing_log.entity_id = u.id AND existing_log.action = 'migrate_user'
+  WHERE u.id IS NOT NULL
+  ON CONFLICT (id) DO NOTHING;
+END IF;
 
 INSERT INTO devices (id, user_id, brand_model, serial_number_1, serial_number_2, assigned_phone)
 SELECT
-  concat('device-', u.id),
+  gen_random_uuid(),
   u.id,
   COALESCE(NULLIF(u.position, ''), 'Migrated from legacy system'),
   concat('serial-', replace(u.id, '-', ''), '-', floor(random() * 100000)::int),
@@ -325,45 +348,41 @@ ON CONFLICT (user_id) DO UPDATE SET
   brand_model = EXCLUDED.brand_model,
   serial_number_1 = EXCLUDED.serial_number_1,
   assigned_phone = EXCLUDED.assigned_phone;
-
-INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, user_id, details, created_at)
-SELECT
-  concat('audit-migrated-', u.id),
-  'user',
-  u.id,
-  'migrate_user',
-  COALESCE(u.username, 'system'),
-  u.id,
-  json_build_object('source', 'migration', 'message', 'Migrated from legacy users table')::text,
-  COALESCE(u.created_at, NOW()::TEXT)
-FROM users u
-LEFT JOIN audit_logs existing_log ON existing_log.entity_id = u.id AND existing_log.action = 'migrate_user'
-WHERE u.id IS NOT NULL
-ON CONFLICT (id) DO NOTHING;
 `;
 
 export const getDataBackfillSql = () => `
+WITH transformed_contacts AS (
+  SELECT
+    (substr(md5(c.id::text), 1, 8) || '-' || substr(md5(c.id::text), 9, 4) || '-' || substr(md5(c.id::text), 13, 4) || '-' || substr(md5(c.id::text), 17, 4) || '-' || substr(md5(c.id::text), 21, 12))::uuid AS contact_id,
+    u.id AS user_id,
+    COALESCE(NULLIF(c.client_name, ''), concat('Contacto ', c.id)) AS name,
+    COALESCE(NULLIF(c.phone, ''), concat('+000000000', substr(c.id::text, 1, 4))) AS phone,
+    NULL AS company,
+    NULL AS position,
+    COALESCE(c.start_time, NOW()::TEXT) AS created_at
+  FROM conversations c
+  LEFT JOIN users u ON u.id = c.user_id
+  WHERE c.id IS NOT NULL
+)
 INSERT INTO contacts (id, user_id, name, phone, company, position, created_at)
 SELECT
-  concat('contact-', c.id),
-  u.id,
-  COALESCE(NULLIF(c.client_name, ''), concat('Contacto ', c.id)),
-  COALESCE(NULLIF(c.phone, ''), concat('+000000000', substr(c.id, 1, 4))),
-  NULL,
-  NULL,
-  COALESCE(c.start_time, NOW()::TEXT)
-FROM conversations c
-LEFT JOIN users u ON u.id = c.user_id
-LEFT JOIN contacts existing_contact ON existing_contact.id = concat('contact-', c.id)
-WHERE c.id IS NOT NULL
-  AND existing_contact.id IS NULL
+  contact_id,
+  user_id,
+  name,
+  phone,
+  company,
+  position,
+  created_at
+FROM transformed_contacts
 ON CONFLICT (id) DO NOTHING;
 
 UPDATE conversations c
 SET contact_id = contact_row.id
 FROM contacts contact_row
 WHERE c.contact_id IS NULL
-  AND contact_row.id = concat('contact-', c.id);
+  AND contact_row.id = (
+    SELECT (substr(md5(c.id::text), 1, 8) || '-' || substr(md5(c.id::text), 9, 4) || '-' || substr(md5(c.id::text), 13, 4) || '-' || substr(md5(c.id::text), 17, 4) || '-' || substr(md5(c.id::text), 21, 12))::uuid
+  );
 
 UPDATE messages
 SET content_type = 'text',

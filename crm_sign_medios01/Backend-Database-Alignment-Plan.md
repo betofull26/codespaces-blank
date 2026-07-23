@@ -53,7 +53,7 @@ Alinear el backend de `crm_sign_medios01` con el nuevo modelo de datos definido 
 
 1. Revisar `backend/src/infrastructure/http/routes` para asegurar que los endpoints devuelvan datos actualizados:
    - `/api/agents`
-   - `/api/agents/:id/conversations`
+   - `/api/users/:id/conversations`
    - `/api/conversations/:id/messages`
    - `/api/contacts`
    - `/api/users`, `/api/devices`

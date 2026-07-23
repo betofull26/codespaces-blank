@@ -3,7 +3,7 @@ import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { Sidebar } from "../components/dashboard/Sidebar";
 import { UserRecordManagement } from "../components/dashboard/UserRecordManagement";
 import { getCurrentUser } from "../lib/auth";
-import { createBackup, downloadBackup, fetchAgents, fetchAgentConversations, fetchAuditLogs, fetchBackups, fetchAllContacts, type AuditLogDto, type BackupRecordDto } from "../services/dashboardApi";
+import { createBackup, downloadBackup, fetchAgents, fetchUserConversations, fetchAuditLogs, fetchBackups, fetchAllContacts, type AuditLogDto, type BackupRecordDto } from "../services/dashboardApi";
 import type { Agent, Conversation } from "../components/dashboard/types";
 import {
   Download, MessageSquare, Users, HardDrive, CheckCircle2, Loader2,
@@ -243,7 +243,7 @@ export function SettingsPage() {
   const [contactsStatus, setContactsStatus] = useState<BackupStatus>("idle");
   const [fullStatus, setFullStatus] = useState<BackupStatus>("idle");
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedAgentConversations, setSelectedAgentConversations] = useState<Conversation[]>([]);
   const [history, setHistory] = useState<BackupRecord[]>([]);
   const [contactsCount, setContactsCount] = useState<number>(0);
@@ -280,8 +280,8 @@ export function SettingsPage() {
         const data = await fetchAgents();
         if (!active) return;
         setAgents(data);
-        if (data.length > 0 && !selectedAgentId) {
-          setSelectedAgentId(data[0].id);
+        if (data.length > 0 && !selectedUserId) {
+          setSelectedUserId(data[0].id);
         }
       } catch (error) {
         if (!active) return;
@@ -295,10 +295,10 @@ export function SettingsPage() {
     return () => {
       active = false;
     };
-  }, [isAuthorized, selectedAgentId]);
+  }, [isAuthorized, selectedUserId]);
 
   useEffect(() => {
-    if (!isAuthorized || !selectedAgentId) {
+    if (!isAuthorized || !selectedUserId) {
       setSelectedAgentConversations([]);
       return;
     }
@@ -306,7 +306,7 @@ export function SettingsPage() {
     let active = true;
     const loadConversations = async () => {
       try {
-        const data = await fetchAgentConversations(selectedAgentId);
+        const data = await fetchUserConversations(selectedUserId);
         if (!active) return;
         setSelectedAgentConversations(data);
       } catch (error) {
@@ -319,7 +319,7 @@ export function SettingsPage() {
     return () => {
       active = false;
     };
-  }, [isAuthorized, selectedAgentId]);
+  }, [isAuthorized, selectedUserId]);
 
   useEffect(() => {
     if (!isAuthorized) return;
@@ -395,7 +395,7 @@ export function SettingsPage() {
   }
 
   const totalChats = selectedAgentConversations.length;
-  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null;
+  const selectedAgent = agents.find((agent) => agent.id === selectedUserId) ?? agents[0] ?? null;
   const totalMsgs = selectedAgentConversations.reduce((sum, conversation) => sum + (conversation.messages?.length ?? 0), 0);
 
   const backupChatsZip = async () => {
@@ -405,7 +405,7 @@ export function SettingsPage() {
     }
     setChatsStatus("running");
     try {
-      const backup = await createBackup("chats", selectedAgentId);
+      const backup = await createBackup("chats", selectedUserId);
       const blob = await downloadBackup(backup.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -541,8 +541,8 @@ export function SettingsPage() {
                       </label>
                       <select
                         id="agent-backup-select"
-                        value={selectedAgentId}
-                        onChange={(event) => setSelectedAgentId(event.target.value)}
+                        value={selectedUserId}
+                        onChange={(event) => setSelectedUserId(event.target.value)}
                         className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
                       >
                         {isAgentsLoading ? (

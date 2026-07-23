@@ -43,7 +43,7 @@ export async function fetchAgents(): Promise<Agent[]> {
   return requestApiData<Agent[]>('/agents');
 }
 
-export async function fetchAllContacts(): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; agentId: string | null }[]> {
+export async function fetchAllContacts(): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string; userId: string | null }[]> {
   return requestApiData('/contacts');
 }
 
@@ -51,8 +51,8 @@ export async function fetchConversations(): Promise<Conversation[]> {
   return requestApiData<Conversation[]>('/conversations');
 }
 
-export async function fetchAgentConversations(agentId: string): Promise<Conversation[]> {
-  return requestApiData<Conversation[]>(`/agents/${encodeURIComponent(agentId)}/conversations`);
+export async function fetchUserConversations(userId: string): Promise<Conversation[]> {
+  return requestApiData<Conversation[]>(`/users/${encodeURIComponent(userId)}/conversations`);
 }
 
 export async function fetchConversationMessages(conversationId: string): Promise<ChatMessage[]> {
@@ -102,7 +102,7 @@ export interface WhatsAppWebhookPayload {
   text: string;
   timestamp: string;
   conversationId?: string;
-  agentId?: string;
+  userId?: string;
 }
 
 export interface BackupRecordDto {
@@ -129,18 +129,18 @@ export async function fetchBackups(): Promise<BackupRecordDto[]> {
   return requestApiData<BackupRecordDto[]>('/backups');
 }
 
-export async function fetchContactsByAgent(agentId: string): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[]> {
-  return requestApiData(`/agents/${encodeURIComponent(agentId)}/contacts`);
+export async function fetchContactsByUser(userId: string): Promise<{ id: string; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[]> {
+  return requestApiData(`/users/${encodeURIComponent(userId)}/contacts`);
 }
 
-export async function fetchContacts(): Promise<{ id: string; agentId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[]> {
+export async function fetchContacts(): Promise<{ id: string; userId: string | null; name: string; phone: string; company: string | null; position: string | null; createdAt: string }[]> {
   return requestApiData('/contacts');
 }
 
-export async function createContact(name: string, phone: string, company?: string, position?: string, agentId?: string) {
+export async function createContact(name: string, phone: string, company?: string, position?: string, userId?: string) {
   return requestApiData('/contacts', {
     method: 'POST',
-    body: JSON.stringify({ name, phone, company, position, agentId }),
+    body: JSON.stringify({ name, phone, company, position, userId }),
   });
 }
 
@@ -157,17 +157,17 @@ export async function deleteContact(contactId: string) {
   });
 }
 
-export async function createContactForAgent(agentId: string, name: string, phone: string, company?: string, position?: string) {
-  return requestApiData(`/agents/${encodeURIComponent(agentId)}/contacts`, {
+export async function createContactForUser(userId: string, name: string, phone: string, company?: string, position?: string) {
+  return requestApiData(`/users/${encodeURIComponent(userId)}/contacts`, {
     method: 'POST',
     body: JSON.stringify({ name, phone, company, position }),
   });
 }
 
-export async function createBackup(backupType: string = 'chats', agentId?: string): Promise<BackupRecordDto> {
+export async function createBackup(backupType: string = 'chats', userId?: string): Promise<BackupRecordDto> {
   return requestApiData<BackupRecordDto>('/backups', {
     method: 'POST',
-    body: JSON.stringify({ backupType, agentId }),
+    body: JSON.stringify({ backupType, userId }),
   });
 }
 

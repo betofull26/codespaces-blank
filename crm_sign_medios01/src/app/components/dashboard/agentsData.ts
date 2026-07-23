@@ -12,7 +12,7 @@ export const agentsData: Agent[] = [
     conversations: [
       {
         id: "conv-1",
-        agentId: "1",
+        userId: "1",
         clientName: "Ana Pérez",
         topic: "Solicitud de presupuesto",
         status: "active",
@@ -24,7 +24,7 @@ export const agentsData: Agent[] = [
       },
       {
         id: "conv-2",
-        agentId: "1",
+        userId: "1",
         clientName: "Luis Ramírez",
         topic: "Reclamo de facturación",
         status: "waiting",
@@ -47,7 +47,7 @@ export const agentsData: Agent[] = [
     conversations: [
       {
         id: "conv-3",
-        agentId: "2",
+        userId: "2",
         clientName: "Juan Castillo",
         topic: "Configuración de cuenta",
         status: "closed",

@@ -10,7 +10,7 @@ export interface ChatMessage {
 
 export interface Conversation {
   id: string;
-  agentId: string;
+  userId: string;
   clientName: string;
   topic: string;
   status: "active" | "closed" | "waiting";

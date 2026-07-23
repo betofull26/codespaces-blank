@@ -5,10 +5,10 @@ export const getConversations = async (
   conversationRepository: ConversationRepository,
 ): Promise<ConversationModel[]> => conversationRepository.list();
 
-export const getConversationsByAgent = async (
+export const getConversationsByUser = async (
   conversationRepository: ConversationRepository,
-  agentId: string,
-): Promise<ConversationModel[]> => conversationRepository.getByAgentId(agentId);
+  userId: string,
+): Promise<ConversationModel[]> => conversationRepository.getByUserId(userId);
 
 export const addMessage = async (
   messageRepository: MessageRepository,

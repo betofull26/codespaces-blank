@@ -36,8 +36,8 @@ Crear un backend funcional que conecte el dashboard con la base de datos existen
 Implementar los endpoints mínimos para que el dashboard funcione:
 1. GET /api/agents
    - devolver la lista de agentes.
-2. GET /api/agents/:agentId/conversations
-   - devolver conversaciones asociadas a un agente.
+2. GET /api/users/:userId/conversations
+   - devolver conversaciones asociadas a un usuario.
 3. GET /api/conversations/:conversationId/messages
    - devolver mensajes de una conversación.
 4. PATCH /api/conversations/:conversationId
