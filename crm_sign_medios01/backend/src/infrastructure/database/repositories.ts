@@ -71,7 +71,7 @@ export class PostgresConversationRepository implements ConversationRepository {
     const db = await getDatabaseClient();
     const existing = await db.query('SELECT id FROM contacts WHERE phone = $1 LIMIT 1', [phone]);
     if (existing.length > 0) {
-      return existing[0].id as string;
+      return (existing[0] as { id: string }).id;
     }
 
     const contactId = `contact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

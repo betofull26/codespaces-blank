@@ -1,4 +1,4 @@
-import type { AgentModel, ConversationModel, MessageModel, UserModel, AuthUserModel, AuditLogModel, SessionModel, DeviceModel } from './models.js';
+import type { AgentModel, ConversationModel, MessageModel, UserModel, AuthUserModel, AuditLogModel, SessionModel, DeviceModel, MediaFileModel } from './models.js';
 
 export interface AgentRepository {
   list(): Promise<AgentModel[]>;

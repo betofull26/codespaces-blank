@@ -188,8 +188,12 @@ agentConversationRouter.post('/conversations/:id/interventions', async (req, res
       conversationId: req.params.id,
       sender,
       text,
+      textBody: text,
       time,
       source: 'dashboard',
+      channel: 'dashboard',
+      contentType: 'text',
+      createdAt: time,
     });
 
     // If the supervisor sent the intervention "as agent", forward it to WhatsApp
@@ -215,8 +219,12 @@ agentConversationRouter.post('/conversations/:id/interventions', async (req, res
             conversationId: req.params.id,
             sender: 'agent',
             text,
+            textBody: text,
             time,
             source: 'whatsapp',
+            channel: 'whatsapp',
+            contentType: 'text',
+            createdAt: time,
             externalMessageId,
           });
 
@@ -296,8 +304,12 @@ agentConversationRouter.post('/whatsapp/send', async (req, res) => {
         conversationId: conv.id,
         sender: 'agent',
         text: sendText,
+        textBody: sendText,
         time: new Date().toISOString(),
         source: 'whatsapp',
+        channel: 'whatsapp',
+        contentType: 'text',
+        createdAt: new Date().toISOString(),
         externalMessageId,
       });
 
