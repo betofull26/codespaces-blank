@@ -28,6 +28,10 @@ export interface MessageModel {
   channel: 'whatsapp' | 'dashboard' | 'internal';
   createdAt: string;
   externalMessageId?: string | null;
+  sender?: 'agent' | 'customer' | 'supervisor' | 'supervisor_as_agent';
+  text?: string;
+  time?: string;
+  source?: string;
 }
 
 export interface CustomerModel {
